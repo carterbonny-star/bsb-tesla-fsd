@@ -61,6 +61,29 @@ void prefs_load(FSDState *state) {
     // Manual HW selection (#110); TeslaHW_Unknown = auto-detect.
     state->hw_override = (TeslaHWVersion)g_prefs.getUChar("hwov", (uint8_t)TeslaHW_Unknown);
 
+    // BSB CN HW3 driving style: 0=Auto, 1=Chill, 2=Normal, 3=Hurry.
+    state->hw3_drive_style = g_prefs.getUChar("h3style", 0);
+    if (state->hw3_drive_style > 3) state->hw3_drive_style = 0;
+
+    // v1.4.33-style speed offset settings
+    state->hw3_auto_speed = g_prefs.getBool("h3auto", false);
+    state->hw3_custom_speed = g_prefs.getBool("h3cust", false);
+    const uint8_t ct_def[5] = {45, 60, 75, 90, 105};
+    const uint8_t hs_def[5] = {25, 25, 25, 25, 25};
+    for (int i = 0; i < 5; ++i) {
+        char k[8];
+        snprintf(k, sizeof(k), "h3ct%d", i);
+        state->hw3_custom_target[i] = g_prefs.getUChar(k, ct_def[i]);
+        snprintf(k, sizeof(k), "h3hs%d", i);
+        state->hw3_high_speed_pct[i] = g_prefs.getUChar(k, hs_def[i]);
+    }
+    state->hw3_offset_slew = g_prefs.getBool("h3slew", false);
+    state->hw3_slew_rate = g_prefs.getUChar("h3rate", 5);
+    if (state->hw3_slew_rate < 1 || state->hw3_slew_rate > 25) state->hw3_slew_rate = 5;
+    state->hw3_high_speed_enable = g_prefs.getBool("h3high", false);
+    state->hw4_offset = g_prefs.getUChar("h4off", 0);
+    if (state->hw4_offset > 21) state->hw4_offset = 21;
+
     // Configurable nag-context signal mapping (#122)
     state->cfg_das_id        = g_prefs.getUShort("cdid",  0);
     state->cfg_apstate_byte  = g_prefs.getUChar("capb",   0);
@@ -141,6 +164,24 @@ void prefs_save(const FSDState *state) {
 
     g_prefs.putUChar("mode",  (uint8_t)state->op_mode);
     g_prefs.putUChar("hwov",  (uint8_t)state->hw_override);   // manual HW selection (#110)
+
+    // BSB CN HW3 driving style
+    g_prefs.putUChar("h3style", state->hw3_drive_style);
+
+    // v1.4.33-style speed offset settings
+    g_prefs.putBool("h3auto", state->hw3_auto_speed);
+    g_prefs.putBool("h3cust", state->hw3_custom_speed);
+    for (int i = 0; i < 5; ++i) {
+        char k[8];
+        snprintf(k, sizeof(k), "h3ct%d", i);
+        g_prefs.putUChar(k, state->hw3_custom_target[i]);
+        snprintf(k, sizeof(k), "h3hs%d", i);
+        g_prefs.putUChar(k, state->hw3_high_speed_pct[i]);
+    }
+    g_prefs.putBool("h3slew", state->hw3_offset_slew);
+    g_prefs.putUChar("h3rate", state->hw3_slew_rate);
+    g_prefs.putBool("h3high", state->hw3_high_speed_enable);
+    g_prefs.putUChar("h4off", state->hw4_offset);
 
     // Configurable nag-context signal mapping (#122)
     g_prefs.putUShort("cdid", state->cfg_das_id);
