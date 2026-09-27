@@ -425,6 +425,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     </div>
   </div>
   </div>
+  </div>
 </details>
 
 <!-- CAN Stats -->
@@ -446,7 +447,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   <summary><span id="controlsSummary" class="control-summary">...</span></summary>
   <div class="controls-body">
   <div class="row">
-    <span class="lbl">Hardware<br><span class="hint">Auto-detect needs 0x398 &mdash; many Model 3/Y never send it. Pick your car if detection is wrong.</span></span>
+    <span class="lbl">车辆硬件<br><span class="hint">建议优先自动识别；若识别不到，可手动选择实际 HW3 / HW4。</span></span>
     <select id="selHwOverride" onchange="cmd('hw_override',parseInt(this.value,10))">
       <option value="0">自动识别</option>
       <option value="3">强制 HW4</option>
