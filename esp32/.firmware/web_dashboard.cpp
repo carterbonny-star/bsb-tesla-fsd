@@ -393,9 +393,11 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   </div>
 </div>
 
-<!-- Battery -->
-<div class="card">
-  <div class="card-head"><div class="icon ic-b">B</div><h2>电池</h2></div>
+<!-- Battery / BMS diagnostics -->
+<details class="config-section" id="batterySection">
+  <summary><div class="icon ic-b">B</div><div class="card-head" style="margin:0"><h2>车辆电池 / BMS（诊断）</h2></div><span id="batterySummary" style="margin-left:auto;font-size:.72em;color:var(--text3)">未检测</span></summary>
+  <div class="config-body">
+  <div class="card" style="margin-bottom:0">
   <div class="row">
     <span class="lbl">BMS 状态</span>
     <span class="pill off" id="bmsSt"><span class="pd"></span>Waiting Frames</span>
@@ -422,7 +424,8 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       <div><div class="hv" id="bTemp">--</div><div class="hl">温度</div></div>
     </div>
   </div>
-</div>
+  </div>
+</details>
 
 <!-- CAN Stats -->
 <div class="card">
@@ -451,8 +454,16 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       <option value="1">强制 Legacy</option>
     </select>
   </div>
+  <div class="row">
+    <span class="lbl">FSD 协议<br><span class="hint">与物理硬件分开。你的 HW4 + FSD v13.2.9 可选 V13。</span></span>
+    <select id="selProtocol" onchange="cmd('fsd_protocol',parseInt(this.value,10))">
+      <option value="0">自动</option>
+      <option value="13">V13</option>
+      <option value="14">V14</option>
+    </select>
+  </div>
   <div class="row" id="rowDriveStyle">
-    <span class="lbl">驾驶风格<br><span class="hint">HW3：自动跟随原车，或锁定轻松 / 普通 / 迅驰</span></span>
+    <span class="lbl">驾驶风格<br><span class="hint">V13：自动跟随原车，或锁定轻松 / 普通 / 迅驰</span></span>
     <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
       <option value="0">自动（跟随原车）</option>
       <option value="1">轻松</option>
@@ -461,7 +472,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     </select>
   </div>
   <div class="row" style="align-items:flex-start">
-    <span class="lbl">限速偏移<br><span class="hint">参考 v1.4.33；HW3/V13 自动/自定义，HW4 手动 raw。</span></span>
+    <span class="lbl">限速偏移<br><span class="hint">参考 v1.4.33；V13 使用自动/自定义目标，V14 使用手动 raw。</span></span>
     <div style="flex:1;min-width:0">
       <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:.78em;color:var(--text2);margin-bottom:8px">
         <span>限速 <b id="spdLimitNow">--</b> km/h</span>
@@ -469,8 +480,8 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
         <span>当前偏移 <b id="spdOffNow">--</b>%</span>
       </div>
       <div id="speedHw3Panel">
-        <div class="row" style="padding:6px 0"><span class="lbl">HW3 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
-        <div class="row" style="padding:6px 0"><span class="lbl">HW3 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
+        <div class="row" style="padding:6px 0"><span class="lbl">V13 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
+        <div class="row" style="padding:6px 0"><span class="lbl">V13 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
         <div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px;margin:6px 0 10px">
           <label class="hint">30→<input id="h3ct0" type="number" min="30" max="45" onchange="speedNum('hw3_ct0',this,30,45)"></label>
           <label class="hint">40→<input id="h3ct1" type="number" min="40" max="60" onchange="speedNum('hw3_ct1',this,40,60)"></label>
@@ -1045,6 +1056,17 @@ function upd(d){
   pill('bmsSt', d.bms && d.bms.seen, (d.bms && d.bms.seen)?'实时':'等待数据');
   var bF=document.getElementById('bmsFrames');
   if(bF) bF.textContent='HV:'+(d.bms_hv_seen||0)+' SOC:'+(d.bms_soc_seen||0)+' TH:'+(d.bms_thermal_seen||0);
+  var bs=document.getElementById('batterySummary');
+  if(bs){
+    if(d.bms&&d.bms.seen){
+      var soc=(d.bms.soc!==undefined)?Number(d.bms.soc).toFixed(0)+'%':'已检测';
+      bs.textContent=soc;
+      bs.style.color='var(--accent)';
+    }else{
+      bs.textContent='未检测';
+      bs.style.color='var(--text3)';
+    }
+  }
 
   // OTA banner
   var otaB=document.getElementById('otaBanner');
@@ -1079,10 +1101,15 @@ function upd(d){
   var hwSel=document.getElementById('selHwOverride');
   if(hwSel && d.hw_override!==undefined && document.activeElement!==hwSel) hwSel.value=String(d.hw_override);
 
+  var ps=document.getElementById('selProtocol');
+  if(ps && d.fsd_protocol_mode!==undefined && document.activeElement!==ps) ps.value=String(d.fsd_protocol_mode);
+
   var ds=document.getElementById('selDriveStyle');
   if(ds && d.hw3_drive_style!==undefined && document.activeElement!==ds) ds.value=String(d.hw3_drive_style);
+  var protoV13=(d.fsd_protocol_mode===13)||(d.fsd_protocol_mode===0&&d.hw_version===2);
+  var protoV14=(d.fsd_protocol_mode===14)||(d.fsd_protocol_mode===0&&d.hw_version===3);
   var dsRow=document.getElementById('rowDriveStyle');
-  if(dsRow) dsRow.style.display=(d.hw_version===2)?'flex':'none';
+  if(dsRow) dsRow.style.display='flex';
 
   var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.speed_limit_seen?Number(d.speed_limit_kph||0).toFixed(0):'--';
   var st=document.getElementById('spdOffTarget'); if(st)st.textContent=(d.hw3_offset_target!==undefined)?d.hw3_offset_target:'--';
@@ -1095,8 +1122,8 @@ function upd(d){
   if(Array.isArray(d.hw3_custom_target))for(var si=0;si<5;si++)speedSetVal('h3ct'+si,d.hw3_custom_target[si]);
   if(Array.isArray(d.hw3_high_speed_pct))for(var sj=0;sj<5;sj++)speedSetVal('h3hs'+sj,d.hw3_high_speed_pct[sj]);
   var h3p=document.getElementById('speedHw3Panel'),h4p=document.getElementById('speedHw4Panel');
-  if(h3p)h3p.style.display=(d.hw_version===2)?'block':'none';
-  if(h4p)h4p.style.display=(d.hw_version===3)?'block':'none';
+  if(h3p)h3p.style.display=protoV14?'none':'block';
+  if(h4p)h4p.style.display=protoV14?'block':'none';
 
   var ct=document.getElementById('chipTemp'),ctm=document.getElementById('chipTempMax');
   if(ct)ct.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1)+' °C':'--';
@@ -1712,6 +1739,7 @@ static String build_json() {
     j += "\"op_mode\":";       j += (int)state.op_mode;                j += ',';
     j += "\"hw_override\":";   j += (int)state.hw_override;            j += ',';
     j += "\"hw_version\":";    j += (int)state.hw_version;             j += ',';
+    j += "\"fsd_protocol_mode\":"; j += (int)state.fsd_protocol_mode;   j += ',';
     j += "\"hw3_drive_style\":"; j += (int)state.hw3_drive_style;       j += ',';
     j += "\"speed_profile_locked\":"; j += state.speed_profile_locked ? "true" : "false"; j += ',';
     j += "\"speed_profile\":"; j += state.speed_profile; j += ',';
@@ -1899,6 +1927,26 @@ static void ws_event(uint8_t num, WStype_t type,
                 prefs_save(&saved);
             }
         }
+    } else if (strstr(buf, "\"fsd_protocol\"")) {
+        if (vptr) {
+            while (*vptr == ' ' || *vptr == ':') vptr++;
+            int sel = atoi(vptr);
+            if (sel != 13 && sel != 14) sel = 0;
+            FSDState saved;
+            state_enter();
+            g_state->fsd_protocol_mode = (uint8_t)sel;
+            // Re-evaluate profile locking without changing physical HW parsing.
+            if (sel == 13 && g_state->hw3_drive_style >= 1 && g_state->hw3_drive_style <= 3) {
+                g_state->speed_profile_locked = true;
+                g_state->speed_profile = (int)g_state->hw3_drive_style - 1;
+            } else if (sel == 14) {
+                g_state->speed_profile_locked = false;
+                if (g_state->speed_profile < 0 || g_state->speed_profile > 4) g_state->speed_profile = 4;
+            }
+            saved = *g_state;
+            state_exit();
+            prefs_save(&saved);
+        }
     } else if (strstr(buf, "\"drive_style\"")) {
         if (vptr) {
             while (*vptr == ' ' || *vptr == ':') vptr++;
@@ -1910,10 +1958,15 @@ static void ws_event(uint8_t num, WStype_t type,
             g_state->hw3_drive_style = (uint8_t)sel;
             if (sel == 0) {
                 g_state->speed_profile_locked = false;
-            } else if (g_state->hw_version == TeslaHW_HW3 ||
-                       g_state->hw_override == TeslaHW_HW3) {
-                g_state->speed_profile_locked = true;
-                g_state->speed_profile = sel - 1;
+            } else {
+                bool v13 = (g_state->fsd_protocol_mode == 13) ||
+                           (g_state->fsd_protocol_mode == 0 &&
+                            (g_state->hw_version == TeslaHW_HW3 ||
+                             g_state->hw_override == TeslaHW_HW3));
+                if (v13) {
+                    g_state->speed_profile_locked = true;
+                    g_state->speed_profile = sel - 1;
+                }
             }
             saved = *g_state;
             state_exit();
