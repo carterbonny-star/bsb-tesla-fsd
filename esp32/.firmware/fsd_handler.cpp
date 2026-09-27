@@ -15,6 +15,7 @@
 #include "../../fsd_logic/fsd_can_ops.h"   // shared stateless frame primitives (set_bit / mux / fsd-selected)
 #include "../../fsd_logic/fsd_ota.h"       // shared 0x318 OTA-install detection (flag vs rolling counter)
 #include <string.h>
+#include <Arduino.h>
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -70,6 +71,25 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
 #endif
     state->sleep_idle_ms        = SLEEP_IDLE_MS;
 
+    // BSB CN: HW3 driving style + v1.4.33 speed-offset defaults.
+    state->hw3_drive_style = 0;
+    state->speed_profile_locked = false;
+    state->hw3_auto_speed = false;
+    state->hw3_custom_speed = false;
+    {
+        const uint8_t defaults[5] = {45, 60, 75, 90, 105};
+        memcpy(state->hw3_custom_target, defaults, sizeof(defaults));
+    }
+    state->hw3_offset_slew = false;
+    state->hw3_slew_rate = 5;
+    state->hw3_high_speed_enable = false;
+    for (int i = 0; i < 5; ++i) state->hw3_high_speed_pct[i] = 25;
+    state->hw3_offset_target = 0;
+    state->hw3_offset_last = 0;
+    state->hw3_slew_count = 0;
+    state->hw3_slew_last_ms = 0;
+    state->hw4_offset = 0;
+
     strncpy(state->wifi_ssid, "Tesla-FSD", sizeof(state->wifi_ssid));
     strncpy(state->wifi_pass, "12345678",  sizeof(state->wifi_pass));
     state->wifi_hidden = false;
@@ -79,7 +99,16 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
 
 void fsd_apply_hw_version(FSDState *state, TeslaHWVersion hw) {
     state->hw_version = hw;
-    // Default speed profile per HW version
+
+    // BSB CN: HW3 driving style.
+    // 0=Auto; 1=Chill; 2=Normal; 3=Hurry -> profile 0/1/2.
+    if (hw == TeslaHW_HW3 && state->hw3_drive_style >= 1 && state->hw3_drive_style <= 3) {
+        state->speed_profile_locked = true;
+        state->speed_profile = (int)state->hw3_drive_style - 1;
+        return;
+    }
+
+    state->speed_profile_locked = false;
     if (hw == TeslaHW_HW4)
         state->speed_profile = 4;
     else if (hw == TeslaHW_Legacy)
@@ -260,6 +289,76 @@ bool fsd_handle_track_mode_inject(FSDState *state, CanFrame *frame) {
     return true;
 }
 
+// ── v1.4.33-style speed offset controller ────────────────────────────────────
+static int hw3_limit_bucket_lt80(float limit_kph) {
+    int rounded = (int)(limit_kph + 0.5f);
+    if (rounded < 35) return 0;
+    if (rounded < 45) return 1;
+    if (rounded < 55) return 2;
+    if (rounded < 65) return 3;
+    return 4;
+}
+
+static int hw3_limit_bucket_hi(float limit_kph) {
+    int rounded = (int)(limit_kph + 0.5f);
+    if (rounded < 85) return 0;
+    if (rounded < 95) return 1;
+    if (rounded < 105) return 2;
+    if (rounded < 115) return 3;
+    return 4;
+}
+
+static uint8_t hw3_target_to_pct(float limit_kph, float target_kph) {
+    if (limit_kph < 1.0f || target_kph <= limit_kph) return 0;
+    float pct = ((target_kph - limit_kph) * 100.0f) / limit_kph;
+    if (pct < 0.0f) pct = 0.0f;
+    if (pct > 50.0f) pct = 50.0f;
+    return (uint8_t)(pct + 0.5f);
+}
+
+static uint8_t hw3_compute_desired_offset(FSDState *state, uint8_t stock_pct) {
+    if (!state->speed_limit_seen || state->speed_limit_kph < 10.0f) return stock_pct;
+    float limit = state->speed_limit_kph;
+    uint8_t desired = stock_pct;
+    if (limit < 80.0f) {
+        if (state->hw3_custom_speed) {
+            int b = hw3_limit_bucket_lt80(limit);
+            desired = hw3_target_to_pct(limit, (float)state->hw3_custom_target[b]);
+        } else if (state->hw3_auto_speed) {
+            static const uint8_t profile_target[3] = {64, 85, 100};
+            int p = state->speed_profile;
+            if (p < 0) p = 0;
+            if (p > 2) p = 2;
+            desired = hw3_target_to_pct(limit, (float)profile_target[p]);
+        }
+    } else if (state->hw3_high_speed_enable) {
+        int b = hw3_limit_bucket_hi(limit);
+        desired = state->hw3_high_speed_pct[b];
+        if (desired > 50) desired = 50;
+    }
+    return desired;
+}
+
+static uint8_t hw3_apply_slew(FSDState *state, uint8_t desired) {
+    state->hw3_offset_target = desired;
+    if (!state->hw3_offset_slew || desired >= state->hw3_offset_last) {
+        state->hw3_offset_last = desired;
+        state->hw3_slew_last_ms = millis();
+        return desired;
+    }
+    uint32_t now = millis();
+    if (state->hw3_slew_last_ms == 0) state->hw3_slew_last_ms = now;
+    uint32_t elapsed = now - state->hw3_slew_last_ms;
+    uint32_t step = ((uint32_t)state->hw3_slew_rate * elapsed) / 1000u;
+    if (step == 0) return state->hw3_offset_last;
+    uint8_t current = state->hw3_offset_last;
+    uint8_t next = (step >= (uint32_t)(current - desired)) ? desired : (uint8_t)(current - step);
+    if (next != current) state->hw3_slew_count++;
+    state->hw3_offset_last = next;
+    state->hw3_slew_last_ms = now;
+    return next;
+}
+
 // ── HW3/HW4 autopilot control (DAS_autopilotControl 0x3FD) ───────────────────
 
 bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
@@ -298,7 +397,8 @@ bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
             int offset = raw * SIG_AP_HW3_SPEED_OFFSET_STEP;
             if (offset < SIG_AP_HW3_SPEED_OFFSET_MIN) offset = SIG_AP_HW3_SPEED_OFFSET_MIN;
             if (offset > SIG_AP_HW3_SPEED_OFFSET_MAX) offset = SIG_AP_HW3_SPEED_OFFSET_MAX;
-            state->speed_offset = offset;
+            uint8_t desired = hw3_compute_desired_offset(state, (uint8_t)offset);
+            state->speed_offset = (int)hw3_apply_slew(state, desired);
 
             // Activate FSD: set bit 46
             set_bit(frame, SIG_AP_FSD_ENABLE_BIT, true);
@@ -397,6 +497,9 @@ bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
             frame->data[SIG_AP_HW4_SPEED_PROFILE_BYTE] |=
                 (uint8_t)((state->speed_profile & SIG_AP_HW4_SPEED_PROFILE_MASK) <<
                           SIG_AP_HW4_SPEED_PROFILE_SHIFT);
+            if (state->hw4_offset > 0) {
+                frame->data[1] = (uint8_t)((frame->data[1] & 0xC0u) | (state->hw4_offset & 0x3Fu));
+            }
             modified = true;
         }
     }
