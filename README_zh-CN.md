@@ -1,3 +1,21 @@
+# BSB Tesla FSD 中文增强版
+
+> 本分支由 **carterbonny-star** 基于上游 `hypery11/flipper-tesla-fsd` 维护。  
+> 项目主页：https://github.com/carterbonny-star/bsb-tesla-fsd
+
+当前中文增强功能：
+- ESP32 Dashboard 中文化
+- HW3 驾驶风格：自动 / 轻松 / 普通 / 迅驰
+- 参考 v1.4.33 的 HW3 限速偏移：30/40/50/60/70 自定义目标
+- 80/90/100/110/120+ 高速百分比偏移
+- 平滑下降速率设置
+- HW4 手动 offset
+- ESP32-S3 芯片温度、最高温度和温度状态显示
+
+> 首次测试请保持 **Listen-Only（只监听）**，先确认硬件识别、CAN RX 和限速读取正常。
+
+---
+
 [English](README.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md)
 
 > [!WARNING]
