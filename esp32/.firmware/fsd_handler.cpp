@@ -72,6 +72,7 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     state->sleep_idle_ms        = SLEEP_IDLE_MS;
 
     // BSB CN: HW3 driving style + v1.4.33 speed-offset defaults.
+    state->fsd_protocol_mode = 0;
     state->hw3_drive_style = 0;
     state->speed_profile_locked = false;
     state->hw3_auto_speed = false;
@@ -97,12 +98,18 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     state->wifi_sta_pass[0] = '\0';
 }
 
+static bool fsd_protocol_is_v13(const FSDState *state) {
+    if (state->fsd_protocol_mode == 13) return true;
+    if (state->fsd_protocol_mode == 14) return false;
+    return state->hw_version == TeslaHW_HW3;
+}
+
 void fsd_apply_hw_version(FSDState *state, TeslaHWVersion hw) {
     state->hw_version = hw;
 
-    // BSB CN: HW3 driving style.
+    // BSB CN: driving style follows V13/V14 protocol, independent of physical HW.
     // 0=Auto; 1=Chill; 2=Normal; 3=Hurry -> profile 0/1/2.
-    if (hw == TeslaHW_HW3 && state->hw3_drive_style >= 1 && state->hw3_drive_style <= 3) {
+    if (fsd_protocol_is_v13(state) && state->hw3_drive_style >= 1 && state->hw3_drive_style <= 3) {
         state->speed_profile_locked = true;
         state->speed_profile = (int)state->hw3_drive_style - 1;
         return;
@@ -196,8 +203,8 @@ void fsd_handle_follow_distance(FSDState *state, const CanFrame *frame) {
     uint8_t fd = (frame->data[SIG_FOLLOW_DIST_BYTE] & SIG_FOLLOW_DIST_MASK) >>
                  SIG_FOLLOW_DIST_SHIFT;
 
-    if (state->hw_version == TeslaHW_HW3) {
-        // HW3: 3 levels  (fd 1→profile 2, 2→1, 3→0)
+    if (fsd_protocol_is_v13(state)) {
+        // V13 protocol: 3 levels  (fd 1→profile 2, 2→1, 3→0)
         switch (fd) {
             case 1: state->speed_profile = 2; break;
             case 2: state->speed_profile = 1; break;
@@ -205,7 +212,7 @@ void fsd_handle_follow_distance(FSDState *state, const CanFrame *frame) {
             default: break;
         }
     } else {
-        // HW4: 5 levels  (fd 1→3, 2→2, 3→1, 4→0, 5→4)
+        // V14 protocol: 5 levels  (fd 1→3, 2→2, 3→1, 4→0, 5→4)
         switch (fd) {
             case 1: state->speed_profile = 3; break;
             case 2: state->speed_profile = 2; break;
@@ -387,8 +394,8 @@ bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
         modified = true;
     }
 
-    if (state->hw_version == TeslaHW_HW3) {
-        // ── HW3 ──────────────────────────────────────────────────────────────
+    if (fsd_protocol_is_v13(state)) {
+        // ── V13 protocol ─────────────────────────────────────────────────────
         if (mux == CAN_MUX_0 && state->fsd_unlock && state->fsd_enabled) {
             // Compute speed offset from current speed signal (bits 6:1 of byte 3)
             int raw = (int)((frame->data[SIG_AP_HW3_SPEED_RAW_BYTE] >>
@@ -453,7 +460,7 @@ bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
             modified = true;
         }
     } else {
-        // ── HW4 ──────────────────────────────────────────────────────────────
+        // ── V14 protocol ─────────────────────────────────────────────────────
         if (mux == CAN_MUX_0 && state->fsd_unlock && state->fsd_enabled) {
             set_bit(frame, SIG_AP_FSD_ENABLE_BIT, true);       // FSD activation
             set_bit(frame, SIG_AP_HW4_FSD_ENABLE_BIT, true);   // HW4 additional FSD bit
