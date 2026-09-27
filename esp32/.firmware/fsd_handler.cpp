@@ -89,6 +89,10 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     state->hw3_offset_last = 0;
     state->hw3_slew_count = 0;
     state->hw3_slew_last_ms = 0;
+    state->hw3_setspeed_seen = false;
+    state->hw3_setspeed_last_kph = 0.0f;
+    state->hw3_setspeed_trigger_ms = 0;
+    state->hw3_setspeed_trigger_count = 0;
     state->hw4_offset = 0;
 
     strncpy(state->wifi_ssid, "Tesla-FSD", sizeof(state->wifi_ssid));
@@ -1177,8 +1181,24 @@ void fsd_handle_das_control(FSDState *state, const CanFrame *frame) {
         frame->data[SIG_DAS_CONTROL_SET_SPEED_LOW_BYTE];
     if (raw == SIG_DAS_CONTROL_SET_SPEED_SNA) return;
 
-    state->cruise_set_speed_kph = (float)raw * SIG_DAS_CONTROL_SET_SPEED_SCALE_KPH;
+    float set_kph = (float)raw * SIG_DAS_CONTROL_SET_SPEED_SCALE_KPH;
+    state->cruise_set_speed_kph = set_kph;
     state->cruise_set_speed_seen = true;
+
+    // Read-only diagnostic: treat a >=1.0 km/h change in DAS_setSpeed as a
+    // candidate touchscreen / set-speed event. This does not modify any CAN data.
+    if (!state->hw3_setspeed_seen) {
+        state->hw3_setspeed_seen = true;
+        state->hw3_setspeed_last_kph = set_kph;
+    } else {
+        float delta = set_kph - state->hw3_setspeed_last_kph;
+        if (delta < 0.0f) delta = -delta;
+        if (delta >= 1.0f) {
+            state->hw3_setspeed_trigger_ms = millis();
+            state->hw3_setspeed_trigger_count++;
+        }
+        state->hw3_setspeed_last_kph = set_kph;
+    }
 }
 
 void fsd_handle_vcfront_lighting(FSDState *state, const CanFrame *frame) {
