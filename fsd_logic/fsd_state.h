@@ -217,7 +217,23 @@ typedef struct FSDState {
     // Real-world effect is unverified.
     uint8_t apmv3_branch;
     bool speed_profile_locked;   // when true, follow distance won't override profile
+    uint8_t hw3_drive_style;     // 0=Auto, 1=Chill, 2=Normal, 3=Hurry (HW3 only)
     uint8_t hw4_offset;          // HW4 mux=2 speed offset override (0 = no override)
+
+    // Speed-offset controller ported from esp32s3_waveshare_wifi_v1.4.33.
+    // HW3/V13: automatic/custom target-speed logic for posted limits, optional
+    // smooth downward slew, and >=80 km/h percentage buckets.
+    bool hw3_auto_speed;
+    bool hw3_custom_speed;
+    uint8_t hw3_custom_target[5];   // limits 30/40/50/60/70 -> target kph
+    bool hw3_offset_slew;
+    uint8_t hw3_slew_rate;          // percentage points per second, 1..25
+    bool hw3_high_speed_enable;
+    uint8_t hw3_high_speed_pct[5];  // limits 80/90/100/110/120+ -> 0..50%
+    uint8_t hw3_offset_target;       // desired percentage offset, runtime
+    uint8_t hw3_offset_last;         // transmitted percentage offset, runtime
+    uint32_t hw3_slew_count;         // downward slew update count
+    uint32_t hw3_slew_last_ms;
 
     // --- DAS_control (0x2B9) — ACC / longitudinal state ---
     uint8_t das_acc_state;       // 0-15 (0=cancel, 3=hold, 4=ACC_ON, 9=pause)
