@@ -38,6 +38,16 @@ static uint32_t g_last_rx     = 0;
 static uint32_t g_last_fps_ms = 0;
 static uint32_t g_last_can_seen_ms = 0;
 static float    g_fps         = 0.0f;
+static float    g_chip_temp_c = 0.0f;
+static float    g_chip_temp_max_c = 0.0f;
+
+static void sample_chip_temperature() {
+    float t = temperatureRead();
+    if (t > -40.0f && t < 150.0f) {
+        g_chip_temp_c = t;
+        if (g_chip_temp_max_c == 0.0f || t > g_chip_temp_max_c) g_chip_temp_max_c = t;
+    }
+}
 
 #define CAN_VEHICLE_ALIVE_MS 3000u
 #define OTA_ESP32_IMAGE_MAGIC 0xE9u
@@ -95,7 +105,7 @@ static bool download_auth_ok() {
 // Tesla dark theme; mobile-first (max 480 px); WebSocket on :81
 static const char WEB_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -103,7 +113,7 @@ static const char WEB_HTML[] PROGMEM = R"rawliteral(
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a1a">
 <link rel="icon" href="data:,">
-<title>Tesla FSD</title>
+<title>BSB Tesla FSD 中文增强版</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -295,11 +305,11 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 
 <!-- Header -->
 <div class="hdr">
-  <h1>Tesla FSD</h1>
-  <div class="sub">ESP32 CAN Controller &middot; <span id="deviceHost">device.local</span></div>
+  <h1>BSB Tesla FSD</h1>
+  <div class="sub">ESP32 CAN 控制器 &middot; <span id="deviceHost">device.local</span></div>
   <div class="cdot" id="dot"></div>
 </div>
-<div id="connErr" class="err">Connection lost &mdash; retrying&hellip;</div>
+<div id="connErr" class="err">连接已断开 &mdash; 正在重试&hellip;</div>
 
 <div id="authPanel" class="auth-panel">
   <div class="auth-box">
@@ -360,17 +370,17 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 
 <!-- FSD Status -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-s">S</div><h2>FSD Status</h2></div>
+  <div class="card-head"><div class="icon ic-s">S</div><h2>FSD 状态</h2></div>
   <div class="row">
-    <span class="lbl">AP Status</span>
+    <span class="lbl">AP 状态</span>
     <span class="pill off" id="fsdSt"><span class="pd"></span>--</span>
   </div>
   <div class="row">
-    <span class="lbl">Mode</span>
+    <span class="lbl">运行模式</span>
     <span class="pill off" id="opMode"><span class="pd"></span>--</span>
   </div>
   <div class="row">
-    <span class="lbl">Hardware</span>
+    <span class="lbl">硬件</span>
     <span class="pill off" id="hwVer"><span class="pd"></span>--</span>
   </div>
   <div class="row">
@@ -378,20 +388,20 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     <span class="pill off" id="nagSt"><span class="pd"></span>--</span>
   </div>
   <div class="row">
-    <span class="lbl">CAN Vehicle</span>
+    <span class="lbl">车辆 CAN</span>
     <span class="pill off" id="canVeh"><span class="pd"></span>--</span>
   </div>
 </div>
 
 <!-- Battery -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-b">B</div><h2>Battery</h2></div>
+  <div class="card-head"><div class="icon ic-b">B</div><h2>电池</h2></div>
   <div class="row">
-    <span class="lbl">BMS Status</span>
+    <span class="lbl">BMS 状态</span>
     <span class="pill off" id="bmsSt"><span class="pd"></span>Waiting Frames</span>
   </div>
   <div class="row">
-    <span class="lbl">BMS Frames</span>
+    <span class="lbl">BMS 帧</span>
     <span id="bmsFrames" style="font-size:.8em;color:var(--text2)">HV:0 SOC:0 TH:0</span>
   </div>
   <div class="hero">
@@ -407,46 +417,89 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       </div>
     </div>
     <div class="hg">
-      <div><div class="hv" id="bVolt">--</div><div class="hl">Voltage</div></div>
-      <div><div class="hv" id="bCurr">--</div><div class="hl">Current</div></div>
-      <div><div class="hv" id="bTemp">--</div><div class="hl">Temp</div></div>
+      <div><div class="hv" id="bVolt">--</div><div class="hl">电压</div></div>
+      <div><div class="hv" id="bCurr">--</div><div class="hl">电流</div></div>
+      <div><div class="hv" id="bTemp">--</div><div class="hl">温度</div></div>
     </div>
   </div>
 </div>
 
 <!-- CAN Stats -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-d">C</div><h2>CAN Bus</h2></div>
+  <div class="card-head"><div class="icon ic-d">C</div><h2>CAN 总线</h2></div>
   <div class="sg">
-    <div class="sb"><div class="sv" id="rxCnt">0</div><div class="sl">RX Frames</div></div>
-    <div class="sb"><div class="sv" id="txCnt">0</div><div class="sl">TX Frames</div></div>
-    <div class="sb"><div class="sv" id="crcErr">0</div><div class="sl">CAN Errors</div><div class="sl" id="crcSplit">RX&nbsp;missed&nbsp;0 &middot; bus&nbsp;0 &middot; TX&nbsp;fail&nbsp;0</div></div>
-    <div class="sb"><div class="sv" id="fps">0.0</div><div class="sl">Frames/s</div></div>
+    <div class="sb"><div class="sv" id="rxCnt">0</div><div class="sl">接收帧</div></div>
+    <div class="sb"><div class="sv" id="txCnt">0</div><div class="sl">发送帧</div></div>
+    <div class="sb"><div class="sv" id="crcErr">0</div><div class="sl">CAN 错误</div><div class="sl" id="crcSplit">RX&nbsp;missed&nbsp;0 &middot; bus&nbsp;0 &middot; TX&nbsp;fail&nbsp;0</div></div>
+    <div class="sb"><div class="sv" id="fps">0.0</div><div class="sl">帧/秒</div></div>
   </div>
 </div>
 
 <!-- Controls -->
 <div class="card controls-section">
-  <div class="card-head"><div class="icon ic-c">C</div><h2>Controls</h2></div>
-  <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">Activate</button>
+  <div class="card-head"><div class="icon ic-c">C</div><h2>控制</h2></div>
+  <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">启用</button>
 <details class="controls-fold">
   <summary><span id="controlsSummary" class="control-summary">...</span></summary>
   <div class="controls-body">
   <div class="row">
     <span class="lbl">Hardware<br><span class="hint">Auto-detect needs 0x398 &mdash; many Model 3/Y never send it. Pick your car if detection is wrong.</span></span>
     <select id="selHwOverride" onchange="cmd('hw_override',parseInt(this.value,10))">
-      <option value="0">Auto-detect</option>
-      <option value="3">Force HW4</option>
-      <option value="2">Force HW3</option>
-      <option value="1">Force Legacy</option>
+      <option value="0">自动识别</option>
+      <option value="3">强制 HW4</option>
+      <option value="2">强制 HW3</option>
+      <option value="1">强制 Legacy</option>
     </select>
   </div>
+  <div class="row" id="rowDriveStyle">
+    <span class="lbl">驾驶风格<br><span class="hint">HW3：自动跟随原车，或锁定轻松 / 普通 / 迅驰</span></span>
+    <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
+      <option value="0">自动（跟随原车）</option>
+      <option value="1">轻松</option>
+      <option value="2">普通</option>
+      <option value="3">迅驰</option>
+    </select>
+  </div>
+  <div class="row" style="align-items:flex-start">
+    <span class="lbl">限速偏移<br><span class="hint">参考 v1.4.33；HW3/V13 自动/自定义，HW4 手动 raw。</span></span>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:.78em;color:var(--text2);margin-bottom:8px">
+        <span>限速 <b id="spdLimitNow">--</b> km/h</span>
+        <span>目标偏移 <b id="spdOffTarget">--</b>%</span>
+        <span>当前偏移 <b id="spdOffNow">--</b>%</span>
+      </div>
+      <div id="speedHw3Panel">
+        <div class="row" style="padding:6px 0"><span class="lbl">HW3 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
+        <div class="row" style="padding:6px 0"><span class="lbl">HW3 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
+        <div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px;margin:6px 0 10px">
+          <label class="hint">30→<input id="h3ct0" type="number" min="30" max="45" onchange="speedNum('hw3_ct0',this,30,45)"></label>
+          <label class="hint">40→<input id="h3ct1" type="number" min="40" max="60" onchange="speedNum('hw3_ct1',this,40,60)"></label>
+          <label class="hint">50→<input id="h3ct2" type="number" min="50" max="75" onchange="speedNum('hw3_ct2',this,50,75)"></label>
+          <label class="hint">60→<input id="h3ct3" type="number" min="60" max="90" onchange="speedNum('hw3_ct3',this,60,90)"></label>
+          <label class="hint">70→<input id="h3ct4" type="number" min="70" max="105" onchange="speedNum('hw3_ct4',this,70,105)"></label>
+        </div>
+        <div class="row" style="padding:6px 0"><span class="lbl">平滑下降<br><span class="hint">降低偏移时缓慢变化，提高偏移立即生效</span></span><label class="sw"><input type="checkbox" id="swH3Slew" onchange="cmd('hw3_offset_slew',this.checked)"><span class="sl2"></span></label></div>
+        <div class="row" style="padding:6px 0"><span class="lbl">下降速率 %/s</span><input id="h3SlewRate" type="number" min="1" max="25" style="width:70px" onchange="speedNum('hw3_slew_rate',this,1,25)"></div>
+        <div class="row" style="padding:6px 0"><span class="lbl">≥80 高速百分比偏移</span><label class="sw"><input type="checkbox" id="swH3High" onchange="cmd('hw3_high_speed_enable',this.checked)"><span class="sl2"></span></label></div>
+        <div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px;margin:6px 0 10px">
+          <label class="hint">80<input id="h3hs0" type="number" min="0" max="50" onchange="speedNum('hw3_hs0',this,0,50)"></label>
+          <label class="hint">90<input id="h3hs1" type="number" min="0" max="50" onchange="speedNum('hw3_hs1',this,0,50)"></label>
+          <label class="hint">100<input id="h3hs2" type="number" min="0" max="50" onchange="speedNum('hw3_hs2',this,0,50)"></label>
+          <label class="hint">110<input id="h3hs3" type="number" min="0" max="50" onchange="speedNum('hw3_hs3',this,0,50)"></label>
+          <label class="hint">120+<input id="h3hs4" type="number" min="0" max="50" onchange="speedNum('hw3_hs4',this,0,50)"></label>
+        </div>
+      </div>
+      <div id="speedHw4Panel">
+        <div class="row" style="padding:6px 0"><span class="lbl">HW4 偏移 raw<br><span class="hint">0=关闭；1~21</span></span><input id="h4off" type="number" min="0" max="21" style="width:70px" onchange="speedNum('hw4_offset',this,0,21)"></div>
+      </div>
+    </div>
+  </div>
   <div class="row">
-    <span class="lbl">Ignore OTA</span>
+    <span class="lbl">忽略 OTA</span>
     <label class="sw"><input type="checkbox" id="swIgnoreOta" onchange="cmd('ignore_ota',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
-    <span class="lbl">FSD Unlock</span>
+    <span class="lbl">FSD 激活</span>
     <label class="sw"><input type="checkbox" id="swFsdUnlock" onchange="cmd('fsd_unlock',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
@@ -454,7 +507,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     <label class="sw"><input type="checkbox" id="swNag" onchange="cmd('nag',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
-    <span class="lbl">Continuous AP</span>
+    <span class="lbl">连续 AP</span>
     <label class="sw"><input type="checkbox" id="swContinuousAp" onchange="cmd('continuous_ap',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
@@ -486,7 +539,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     <label class="sw"><input type="checkbox" id="swAbrt" onchange="cmd('abort_guard',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
-    <span class="lbl">BMS Display</span>
+    <span class="lbl">BMS 显示</span>
     <label class="sw"><input type="checkbox" id="swBms" onchange="cmd('bms',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
@@ -494,11 +547,11 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     <label class="sw"><input type="checkbox" id="swFsd" onchange="cmd('force_fsd',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
-    <span class="lbl">China Mode</span>
+    <span class="lbl">中国模式</span>
     <label class="sw"><input type="checkbox" id="swChina" onchange="cmd('china_mode',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row" id="rowChime">
-    <span class="lbl">Suppress Chime</span>
+    <span class="lbl">关闭限速提示音</span>
     <label class="sw"><input type="checkbox" id="swChime" onchange="cmd('suppress_speed_chime',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
@@ -596,7 +649,7 @@ R"rawliteral(
 #endif
 R"rawliteral(
   <div class="row">
-    <span class="lbl">CAN Dump</span>
+    <span class="lbl">CAN 记录</span>
     <label class="sw"><input type="checkbox" id="swDump" onchange="cmd('dump',this.checked)"><span class="sl2"></span></label>
   </div>
 )rawliteral"
@@ -656,7 +709,7 @@ R"rawliteral(
 
 <!-- Administration -->
 <details class="config-section">
-  <summary><div class="icon ic-c">A</div><div class="card-head" style="margin:0"><h2>Administration</h2></div></summary>
+  <summary><div class="icon ic-c">A</div><div class="card-head" style="margin:0"><h2>管理</h2></div></summary>
   <div class="config-body">
 
 <!-- HTTP CAN Log -->
@@ -690,7 +743,7 @@ R"rawliteral(
 
 <!-- WiFi Config -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-c">W</div><h2>WiFi Configuration</h2></div>
+  <div class="card-head"><div class="icon ic-c">W</div><h2>WiFi 设置</h2></div>
   <div class="log-info" style="margin-bottom:10px">
     The device starts its own access point by default. Optionally set a network below; when a network name is set, the device tries to connect to it on boot and starts its own access point if it cannot connect.
   </div>
@@ -703,11 +756,11 @@ R"rawliteral(
     <input type="text" id="wifiSsid" maxlength="32" style="width:140px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right">
   </div>
   <div class="row">
-    <span class="lbl">Password</span>
+    <span class="lbl">密码</span>
     <input type="password" id="wifiPass" maxlength="64" style="width:140px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right">
   </div>
   <div class="row">
-    <span class="lbl">Stealth Mode (Hidden)</span>
+    <span class="lbl">隐藏热点</span>
     <label class="sw"><input type="checkbox" id="swWifiHid"><span class="sl2"></span></label>
   </div>
   <div class="row">
@@ -715,26 +768,26 @@ R"rawliteral(
     <span style="font-size:.72em;color:var(--text3)">optional</span>
   </div>
   <div class="row">
-    <span class="lbl">Network Name</span>
+    <span class="lbl">网络名称</span>
     <input type="text" id="wifiStaSsid" maxlength="32" style="width:140px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right">
   </div>
   <div class="row">
-    <span class="lbl">Network Password</span>
+    <span class="lbl">网络密码</span>
     <input type="password" id="wifiStaPass" maxlength="64" style="width:140px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right">
   </div>
-  <button class="btn-main btn-stop" onclick="saveWifi()" style="margin-top:12px">SAVE & RESTART WIFI</button>
+  <button class="btn-main btn-stop" onclick="saveWifi()" style="margin-top:12px">保存并重启 WiFi</button>
 </div>
 
 <!-- OTA Update -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-c">U</div><h2>OTA Firmware Update</h2></div>
+  <div class="card-head"><div class="icon ic-c">U</div><h2>OTA 固件更新</h2></div>
   <div style="font-size:.75em;color:var(--text3);margin-bottom:12px;line-height:1.5">
     Upload a .bin firmware file. Device will reboot after a successful update.
   </div>
   <form id="otaForm" enctype="multipart/form-data" style="margin:0">
     <input type="file" id="otaFile" class="ota-file" accept=".bin" onchange="uploadFirmware()">
     <button type="button" class="btn-main btn-blue" id="otaSelectBtn" onclick="selectFirmware(this)">
-      SELECT FIRMWARE (.bin)
+      选择固件 (.bin)
     </button>
   </form>
   <div id="otaProgress" class="ota-progress">
@@ -761,24 +814,36 @@ R"rawliteral(
 
 <!-- Device Info -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-d">D</div><h2>Device</h2></div>
+  <div class="card-head"><div class="icon ic-d">D</div><h2>设备</h2></div>
   <div class="row">
-    <span class="lbl">Firmware</span>
+    <span class="lbl">固件版本</span>
     <span id="fwBuild" style="font-size:.8em;color:var(--text2)">--</span>
   </div>
   <div class="row">
-    <span class="lbl">Uptime</span>
+    <span class="lbl">运行时间</span>
     <span id="uptime" style="font-variant-numeric:tabular-nums">--</span>
   </div>
   <div class="row">
-    <span class="lbl">WiFi Clients</span>
+    <span class="lbl">芯片温度<br><span class="hint">ESP32-S3 内部传感器，仅用于趋势监控</span></span>
+    <span id="chipTemp" style="font-variant-numeric:tabular-nums">--</span>
+  </div>
+  <div class="row">
+    <span class="lbl">最高温度</span>
+    <span id="chipTempMax" style="font-variant-numeric:tabular-nums">--</span>
+  </div>
+  <div class="row">
+    <span class="lbl">温度状态</span>
+    <span class="pill off" id="chipTempSt"><span class="pd"></span>--</span>
+  </div>
+  <div class="row">
+    <span class="lbl">WiFi 客户端</span>
     <span id="wifiCl">--</span>
   </div>
   <div class="row">
-    <span class="lbl">OTA Partition</span>
+    <span class="lbl">OTA 分区</span>
     <span id="otaPartInfo" style="font-size:.78em;color:var(--text2)">--</span>
   </div>
-  <button class="btn-main btn-yellow" onclick="restartDevice(this)" style="margin-top:12px">RESTART DEVICE</button>
+  <button class="btn-main btn-yellow" onclick="restartDevice(this)" style="margin-top:12px">重启设备</button>
 </div>
 
   </div>
@@ -792,7 +857,8 @@ R"rawliteral( TTGO T-Display + MCP2515)rawliteral"
 R"rawliteral( M5Stack ATOM Lite + ATOMIC CAN Base)rawliteral"
 #endif
 R"rawliteral(</div>
-<div class="foot">Free &amp; open source &middot; <a href="https://fsd.fkey.id/" target="_blank" rel="noopener">support the research</a></div>
+<div class="foot">BSB Tesla FSD 中文增强版 &middot; <a href="https://github.com/carterbonny-star/bsb-tesla-fsd" target="_blank" rel="noopener">GitHub 项目主页</a></div>
+<div class="foot">基于 flipper-tesla-fsd 开源项目</div>
 </div><!-- /wrap -->
 
 <script>
@@ -965,8 +1031,8 @@ function upd(d){
   if(!d || Date.now() < busy) return;
   // Status
   var apActive=!!d.ap_active;
-  pill('fsdSt', apActive, apActive?'Active':'Waiting');
-  pill('opMode', d.op_mode===1, d.op_mode===1?'Active':'Listen-Only');
+  pill('fsdSt', apActive, apActive?'已激活':'等待');
+  pill('opMode', d.op_mode===1, d.op_mode===1?'Active（发送）':'Listen-Only（只监听）');
 
   var hwEl=document.getElementById('hwVer');
   if(hwEl){
@@ -975,8 +1041,8 @@ function upd(d){
   }
 
   pill('nagSt', d.nag_killer, d.nag_killer?'ON':'OFF');
-  pill('canVeh', d.can_vehicle_detected, d.can_vehicle_detected?'Detected':'No CAN Traffic');
-  pill('bmsSt', d.bms && d.bms.seen, (d.bms && d.bms.seen)?'Live':'Waiting Frames');
+  pill('canVeh', d.can_vehicle_detected, d.can_vehicle_detected?'已检测':'无 CAN 数据');
+  pill('bmsSt', d.bms && d.bms.seen, (d.bms && d.bms.seen)?'实时':'等待数据');
   var bF=document.getElementById('bmsFrames');
   if(bF) bF.textContent='HV:'+(d.bms_hv_seen||0)+' SOC:'+(d.bms_soc_seen||0)+' TH:'+(d.bms_thermal_seen||0);
 
@@ -1003,7 +1069,7 @@ function upd(d){
   var act=d.op_mode===1;
   var btn=document.getElementById('btnMode');
   if(btn){
-    btn.textContent=act?'Deactivate':'Activate';
+    btn.textContent=act?'停用':'启用';
     btn.className='btn-main '+(act?'btn-stop':'btn-act');
   }
 
@@ -1012,6 +1078,34 @@ function upd(d){
   // Manual HW selection (#110) — don't fight the user while the menu is open.
   var hwSel=document.getElementById('selHwOverride');
   if(hwSel && d.hw_override!==undefined && document.activeElement!==hwSel) hwSel.value=String(d.hw_override);
+
+  var ds=document.getElementById('selDriveStyle');
+  if(ds && d.hw3_drive_style!==undefined && document.activeElement!==ds) ds.value=String(d.hw3_drive_style);
+  var dsRow=document.getElementById('rowDriveStyle');
+  if(dsRow) dsRow.style.display=(d.hw_version===2)?'flex':'none';
+
+  var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.speed_limit_seen?Number(d.speed_limit_kph||0).toFixed(0):'--';
+  var st=document.getElementById('spdOffTarget'); if(st)st.textContent=(d.hw3_offset_target!==undefined)?d.hw3_offset_target:'--';
+  var sn=document.getElementById('spdOffNow'); if(sn)sn.textContent=(d.speed_offset!==undefined)?d.speed_offset:'--';
+  var a3=document.getElementById('swH3Auto'); if(a3)a3.checked=!!d.hw3_auto_speed;
+  var c3=document.getElementById('swH3Cust'); if(c3)c3.checked=!!d.hw3_custom_speed;
+  var sws=document.getElementById('swH3Slew'); if(sws)sws.checked=!!d.hw3_offset_slew;
+  var swh=document.getElementById('swH3High'); if(swh)swh.checked=!!d.hw3_high_speed_enable;
+  speedSetVal('h3SlewRate',d.hw3_slew_rate||5); speedSetVal('h4off',d.hw4_offset||0);
+  if(Array.isArray(d.hw3_custom_target))for(var si=0;si<5;si++)speedSetVal('h3ct'+si,d.hw3_custom_target[si]);
+  if(Array.isArray(d.hw3_high_speed_pct))for(var sj=0;sj<5;sj++)speedSetVal('h3hs'+sj,d.hw3_high_speed_pct[sj]);
+  var h3p=document.getElementById('speedHw3Panel'),h4p=document.getElementById('speedHw4Panel');
+  if(h3p)h3p.style.display=(d.hw_version===2)?'block':'none';
+  if(h4p)h4p.style.display=(d.hw_version===3)?'block':'none';
+
+  var ct=document.getElementById('chipTemp'),ctm=document.getElementById('chipTempMax');
+  if(ct)ct.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1)+' °C':'--';
+  if(ctm)ctm.textContent=(d.chip_temp_max_c!==undefined)?Number(d.chip_temp_max_c).toFixed(1)+' °C':'--';
+  var tv=Number(d.chip_temp_c||0),tlabel='正常',twarn='';
+  if(tv>=90){tlabel='过热';twarn='warn';}
+  else if(tv>=80){tlabel='高温';twarn='warn';}
+  else if(tv>=70){tlabel='偏高';}
+  pill('chipTempSt',tv>0,tlabel,twarn);
   if(document.getElementById('swFsdUnlock')) document.getElementById('swFsdUnlock').checked=d.fsd_unlock;
   if(document.getElementById('swNag')) document.getElementById('swNag').checked=d.nag_killer;
   if(document.getElementById('swContinuousAp')) document.getElementById('swContinuousAp').checked=d.continuous_ap;
@@ -1259,6 +1353,20 @@ function saveWifi(){
     cmd('wifi_cfg',{ssid:s,pass:p,hidden:h,sta_ssid:ss,sta_pass:sp});
   }
 }
+function speedNum(cmdName,el,minv,maxv){
+  var v=parseInt(el.value,10); if(isNaN(v))v=minv; v=Math.max(minv,Math.min(maxv,v)); el.value=v; cmd(cmdName,v);
+}
+function speedMutex(which,on){
+  if(which==='auto'){
+    if(on){var c=document.getElementById('swH3Cust');if(c)c.checked=false;cmd('hw3_custom_speed',false);}
+    cmd('hw3_auto_speed',on);
+  }else{
+    if(on){var a=document.getElementById('swH3Auto');if(a)a.checked=false;cmd('hw3_auto_speed',false);}
+    cmd('hw3_custom_speed',on);
+  }
+}
+function speedSetVal(id,v){var e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;}
+
 function cmd(c,v){
   if(ws&&ws.readyState===1) {
     ws.send(JSON.stringify({cmd:c,value:v}));
@@ -1597,13 +1705,32 @@ static String build_json() {
     // http_can_stream objects — back near the beta.11 shape now that the heavy
     // blackbox/capability/profile blocks fetch from /api/aux (#124). 1.5 KB
     // avoids per-call String reallocs; build_json() runs on every WS push.
-    j.reserve(1536);
+    j.reserve(2048);
     j  = "{";
     j += "\"fsd_enabled\":";   j += state.fsd_enabled                 ? "true" : "false"; j += ',';
     j += "\"ap_active\":";     j += state.ap_active                   ? "true" : "false"; j += ',';
     j += "\"op_mode\":";       j += (int)state.op_mode;                j += ',';
     j += "\"hw_override\":";   j += (int)state.hw_override;            j += ',';
     j += "\"hw_version\":";    j += (int)state.hw_version;             j += ',';
+    j += "\"hw3_drive_style\":"; j += (int)state.hw3_drive_style;       j += ',';
+    j += "\"speed_profile_locked\":"; j += state.speed_profile_locked ? "true" : "false"; j += ',';
+    j += "\"speed_profile\":"; j += state.speed_profile; j += ',';
+    j += "\"speed_offset\":"; j += state.speed_offset; j += ',';
+    j += "\"speed_limit_seen\":"; j += state.speed_limit_seen ? "true" : "false"; j += ',';
+    j += "\"speed_limit_kph\":"; j += String(state.speed_limit_kph, 1); j += ',';
+    j += "\"hw3_auto_speed\":"; j += state.hw3_auto_speed ? "true" : "false"; j += ',';
+    j += "\"hw3_custom_speed\":"; j += state.hw3_custom_speed ? "true" : "false"; j += ',';
+    j += "\"hw3_custom_target\":[";
+    for (int i=0;i<5;i++){ if(i)j+=','; j+=(int)state.hw3_custom_target[i]; } j += "],";
+    j += "\"hw3_offset_slew\":"; j += state.hw3_offset_slew ? "true" : "false"; j += ',';
+    j += "\"hw3_slew_rate\":"; j += (int)state.hw3_slew_rate; j += ',';
+    j += "\"hw3_offset_target\":"; j += (int)state.hw3_offset_target; j += ',';
+    j += "\"hw3_high_speed_enable\":"; j += state.hw3_high_speed_enable ? "true" : "false"; j += ',';
+    j += "\"hw3_high_speed_pct\":[";
+    for (int i=0;i<5;i++){ if(i)j+=','; j+=(int)state.hw3_high_speed_pct[i]; } j += "],";
+    j += "\"hw4_offset\":"; j += (int)state.hw4_offset; j += ',';
+    j += "\"chip_temp_c\":"; j += String(g_chip_temp_c, 1); j += ',';
+    j += "\"chip_temp_max_c\":"; j += String(g_chip_temp_max_c, 1); j += ',';
     j += "\"ota\":";           j += state.tesla_ota_in_progress        ? "true" : "false"; j += ',';
     j += "\"autopark_block\":"; j += state.autopark_tx_block            ? "true" : "false"; j += ',';
     j += "\"signal_map_das_missing\":"; j += state.signal_map_das_missing ? "true" : "false"; j += ',';
@@ -1771,6 +1898,58 @@ static void ws_event(uint8_t num, WStype_t type,
                               (want == TeslaHW_Legacy) ? "Legacy" : "Auto");
                 prefs_save(&saved);
             }
+        }
+    } else if (strstr(buf, "\"drive_style\"")) {
+        if (vptr) {
+            while (*vptr == ' ' || *vptr == ':') vptr++;
+            int sel = atoi(vptr);
+            if (sel < 0) sel = 0;
+            if (sel > 3) sel = 3;
+            FSDState saved;
+            state_enter();
+            g_state->hw3_drive_style = (uint8_t)sel;
+            if (sel == 0) {
+                g_state->speed_profile_locked = false;
+            } else if (g_state->hw_version == TeslaHW_HW3 ||
+                       g_state->hw_override == TeslaHW_HW3) {
+                g_state->speed_profile_locked = true;
+                g_state->speed_profile = sel - 1;
+            }
+            saved = *g_state;
+            state_exit();
+            prefs_save(&saved);
+        }
+    } else if (strstr(buf, "\"hw3_auto_speed\"") || strstr(buf, "\"hw3_custom_speed\"") ||
+               strstr(buf, "\"hw3_offset_slew\"") || strstr(buf, "\"hw3_slew_rate\"") ||
+               strstr(buf, "\"hw3_high_speed_enable\"") || strstr(buf, "\"hw4_offset\"") ||
+               strstr(buf, "\"hw3_ct0\"") || strstr(buf, "\"hw3_ct1\"") || strstr(buf, "\"hw3_ct2\"") ||
+               strstr(buf, "\"hw3_ct3\"") || strstr(buf, "\"hw3_ct4\"") ||
+               strstr(buf, "\"hw3_hs0\"") || strstr(buf, "\"hw3_hs1\"") || strstr(buf, "\"hw3_hs2\"") ||
+               strstr(buf, "\"hw3_hs3\"") || strstr(buf, "\"hw3_hs4\"")) {
+        if (vptr) {
+            while (*vptr == ' ' || *vptr == ':') vptr++;
+            bool bv = (strncmp(vptr, "true", 4) == 0);
+            int iv = atoi(vptr);
+            FSDState saved;
+            state_enter();
+            if (strstr(buf, "\"hw3_auto_speed\"")) { g_state->hw3_auto_speed=bv; if(bv)g_state->hw3_custom_speed=false; }
+            else if (strstr(buf, "\"hw3_custom_speed\"")) { g_state->hw3_custom_speed=bv; if(bv)g_state->hw3_auto_speed=false; }
+            else if (strstr(buf, "\"hw3_offset_slew\"")) g_state->hw3_offset_slew=bv;
+            else if (strstr(buf, "\"hw3_slew_rate\"")) g_state->hw3_slew_rate=(uint8_t)((iv<1)?1:(iv>25?25:iv));
+            else if (strstr(buf, "\"hw3_high_speed_enable\"")) g_state->hw3_high_speed_enable=bv;
+            else if (strstr(buf, "\"hw4_offset\"")) g_state->hw4_offset=(uint8_t)((iv<0)?0:(iv>21?21:iv));
+            else {
+                const int cmin[5]={30,40,50,60,70}, cmax[5]={45,60,75,90,105};
+                for(int i=0;i<5;i++){
+                    char key[20]; snprintf(key,sizeof(key),"\"hw3_ct%d\"",i);
+                    if(strstr(buf,key)){ int x=iv; if(x<cmin[i])x=cmin[i]; if(x>cmax[i])x=cmax[i]; g_state->hw3_custom_target[i]=(uint8_t)x; }
+                    snprintf(key,sizeof(key),"\"hw3_hs%d\"",i);
+                    if(strstr(buf,key)){ int x=iv; if(x<0)x=0; if(x>50)x=50; g_state->hw3_high_speed_pct[i]=(uint8_t)x; }
+                }
+            }
+            saved=*g_state;
+            state_exit();
+            prefs_save(&saved);
         }
     } else if (strstr(buf, "\"ignore_ota\"")) {
         if (vptr) {
@@ -2563,6 +2742,7 @@ void web_dashboard_init(FSDState *state,
     g_last_fps_ms = millis();
     g_last_rx     = state ? state->rx_count : 0;
     g_last_can_seen_ms = (state && state->rx_count > 0) ? millis() : 0;
+    sample_chip_temperature();
 
     g_http.on("/",           HTTP_GET,  handle_root);
     g_http.on("/api/status", HTTP_GET,  handle_status);
@@ -2592,6 +2772,7 @@ void web_dashboard_update() {
     // FPS calculation + 1 Hz WebSocket broadcast
     uint32_t now = millis();
     if ((now - g_last_fps_ms) >= 1000u) {
+        sample_chip_temperature();
         FSDState state;
         if (!state_copy(&state)) return;
         uint32_t rx = state.rx_count;
