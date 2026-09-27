@@ -208,6 +208,22 @@ details select{background:var(--card2);border:1px solid var(--border);color:var(
 details input{background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right;width:60px}
 details input.cgn{width:38px;margin-left:4px}
 
+/* Speed settings use the full card width, with one limit per row. */
+.speed-offset{display:block}
+.speed-offset>.lbl{display:block;margin-bottom:10px}
+.speed-offset .row{gap:8px}
+.speed-offset .row>.lbl{min-width:0}
+.speed-bands{margin:6px 0 10px}
+.speed-band{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:6px 12px;padding:8px 0;color:var(--text2);font-size:.82em}
+.speed-band+.speed-band{border-top:1px solid rgba(255,255,255,.04)}
+.speed-value{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.speed-band input{width:64px;min-height:36px;font-size:16px}
+.chip-temperature{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding:12px 14px}
+.chip-temperature .temp-reading{display:flex;align-items:baseline;gap:6px;font-size:.82em}
+.chip-temperature b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip-temperature .pill{margin-left:auto;white-space:nowrap}
+
 /* ── Pills ── */
 .pill{display:inline-flex;align-items:center;gap:5px;
   padding:3px 10px;border-radius:20px;font-size:.8em;font-weight:600}
@@ -308,6 +324,13 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   <h1>BSB Tesla FSD</h1>
   <div class="sub">ESP32 CAN 控制器 &middot; <span id="deviceHost">device.local</span></div>
   <div class="cdot" id="dot"></div>
+</div>
+
+<!-- Chip temperature: before FSD status, using the existing live telemetry IDs. -->
+<div class="card chip-temperature" aria-label="ESP32 芯片温度监控" title="ESP32-S3 内部传感器，仅用于趋势监控">
+  <span class="temp-reading"><span class="lbl">芯片温度</span><b id="chipTemp">--</b></span>
+  <span class="temp-reading"><span class="lbl">最高</span><b id="chipTempMax">--</b></span>
+  <span class="pill off" id="chipTempSt"><span class="pd"></span>--</span>
 </div>
 <div id="connErr" class="err">连接已断开 &mdash; 正在重试&hellip;</div>
 
@@ -472,7 +495,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       <option value="3">迅驰</option>
     </select>
   </div>
-  <div class="row" style="align-items:flex-start">
+  <div class="row speed-offset">
     <span class="lbl">限速偏移<br><span class="hint">参考 v1.4.33；V13 使用自动/自定义目标，V14 使用手动 raw。</span></span>
     <div style="flex:1;min-width:0">
       <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:.78em;color:var(--text2);margin-bottom:8px">
@@ -483,22 +506,22 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       <div id="speedHw3Panel">
         <div class="row" style="padding:6px 0"><span class="lbl">V13 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
         <div class="row" style="padding:6px 0"><span class="lbl">V13 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
-        <div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px;margin:6px 0 10px">
-          <label class="hint">30→<input id="h3ct0" type="number" min="30" max="45" onchange="speedNum('hw3_ct0',this,30,45)"></label>
-          <label class="hint">40→<input id="h3ct1" type="number" min="40" max="60" onchange="speedNum('hw3_ct1',this,40,60)"></label>
-          <label class="hint">50→<input id="h3ct2" type="number" min="50" max="75" onchange="speedNum('hw3_ct2',this,50,75)"></label>
-          <label class="hint">60→<input id="h3ct3" type="number" min="60" max="90" onchange="speedNum('hw3_ct3',this,60,90)"></label>
-          <label class="hint">70→<input id="h3ct4" type="number" min="70" max="105" onchange="speedNum('hw3_ct4',this,70,105)"></label>
+        <div class="speed-bands">
+          <label class="speed-band"><span>限速 30 km/h</span><span class="speed-value">目标 <input id="h3ct0" type="number" min="30" max="45" onchange="speedNum('hw3_ct0',this,30,45)"><span>km/h</span></span></label>
+          <label class="speed-band"><span>限速 40 km/h</span><span class="speed-value">目标 <input id="h3ct1" type="number" min="40" max="60" onchange="speedNum('hw3_ct1',this,40,60)"><span>km/h</span></span></label>
+          <label class="speed-band"><span>限速 50 km/h</span><span class="speed-value">目标 <input id="h3ct2" type="number" min="50" max="75" onchange="speedNum('hw3_ct2',this,50,75)"><span>km/h</span></span></label>
+          <label class="speed-band"><span>限速 60 km/h</span><span class="speed-value">目标 <input id="h3ct3" type="number" min="60" max="90" onchange="speedNum('hw3_ct3',this,60,90)"><span>km/h</span></span></label>
+          <label class="speed-band"><span>限速 70 km/h</span><span class="speed-value">目标 <input id="h3ct4" type="number" min="70" max="105" onchange="speedNum('hw3_ct4',this,70,105)"><span>km/h</span></span></label>
         </div>
         <div class="row" style="padding:6px 0"><span class="lbl">平滑下降<br><span class="hint">降低偏移时缓慢变化，提高偏移立即生效</span></span><label class="sw"><input type="checkbox" id="swH3Slew" onchange="cmd('hw3_offset_slew',this.checked)"><span class="sl2"></span></label></div>
         <div class="row" style="padding:6px 0"><span class="lbl">下降速率 %/s</span><input id="h3SlewRate" type="number" min="1" max="25" style="width:70px" onchange="speedNum('hw3_slew_rate',this,1,25)"></div>
         <div class="row" style="padding:6px 0"><span class="lbl">≥80 高速百分比偏移</span><label class="sw"><input type="checkbox" id="swH3High" onchange="cmd('hw3_high_speed_enable',this.checked)"><span class="sl2"></span></label></div>
-        <div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px;margin:6px 0 10px">
-          <label class="hint">80<input id="h3hs0" type="number" min="0" max="50" onchange="speedNum('hw3_hs0',this,0,50)"></label>
-          <label class="hint">90<input id="h3hs1" type="number" min="0" max="50" onchange="speedNum('hw3_hs1',this,0,50)"></label>
-          <label class="hint">100<input id="h3hs2" type="number" min="0" max="50" onchange="speedNum('hw3_hs2',this,0,50)"></label>
-          <label class="hint">110<input id="h3hs3" type="number" min="0" max="50" onchange="speedNum('hw3_hs3',this,0,50)"></label>
-          <label class="hint">120+<input id="h3hs4" type="number" min="0" max="50" onchange="speedNum('hw3_hs4',this,0,50)"></label>
+        <div class="speed-bands">
+          <label class="speed-band"><span>限速 80 km/h</span><span class="speed-value">偏移 + <input id="h3hs0" type="number" min="0" max="50" onchange="speedNum('hw3_hs0',this,0,50)"><span>%</span></span></label>
+          <label class="speed-band"><span>限速 90 km/h</span><span class="speed-value">偏移 + <input id="h3hs1" type="number" min="0" max="50" onchange="speedNum('hw3_hs1',this,0,50)"><span>%</span></span></label>
+          <label class="speed-band"><span>限速 100 km/h</span><span class="speed-value">偏移 + <input id="h3hs2" type="number" min="0" max="50" onchange="speedNum('hw3_hs2',this,0,50)"><span>%</span></span></label>
+          <label class="speed-band"><span>限速 110 km/h</span><span class="speed-value">偏移 + <input id="h3hs3" type="number" min="0" max="50" onchange="speedNum('hw3_hs3',this,0,50)"><span>%</span></span></label>
+          <label class="speed-band"><span>限速 120+ km/h</span><span class="speed-value">偏移 + <input id="h3hs4" type="number" min="0" max="50" onchange="speedNum('hw3_hs4',this,0,50)"><span>%</span></span></label>
         </div>
       </div>
       <div id="speedHw4Panel">
@@ -834,18 +857,6 @@ R"rawliteral(
   <div class="row">
     <span class="lbl">运行时间</span>
     <span id="uptime" style="font-variant-numeric:tabular-nums">--</span>
-  </div>
-  <div class="row">
-    <span class="lbl">芯片温度<br><span class="hint">ESP32-S3 内部传感器，仅用于趋势监控</span></span>
-    <span id="chipTemp" style="font-variant-numeric:tabular-nums">--</span>
-  </div>
-  <div class="row">
-    <span class="lbl">最高温度</span>
-    <span id="chipTempMax" style="font-variant-numeric:tabular-nums">--</span>
-  </div>
-  <div class="row">
-    <span class="lbl">温度状态</span>
-    <span class="pill off" id="chipTempSt"><span class="pd"></span>--</span>
   </div>
   <div class="row">
     <span class="lbl">WiFi 客户端</span>
