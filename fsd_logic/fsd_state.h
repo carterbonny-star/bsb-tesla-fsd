@@ -239,11 +239,9 @@ typedef struct FSDState {
     uint32_t hw3_slew_count;         // downward slew update count
     uint32_t hw3_slew_last_ms;
 
-    // Experimental set-speed trigger gate: infer a possible touchscreen/set-speed
-    // action from a meaningful change in DAS_control (0x2B9) DAS_setSpeed. When
-    // enabled, V13 custom target offset is only applied for a short window after
-    // such a change. We never modify 0x2B9 in this experiment.
-    bool hw3_setspeed_gate;           // opt-in, default OFF
+    // Read-only set-speed event detector: infer a possible touchscreen/set-speed
+    // action from a meaningful change in DAS_control (0x2B9) DAS_setSpeed.
+    // Diagnostic only: never modifies 0x2B9 or gates CAN injection.
     bool hw3_setspeed_seen;           // baseline sample captured
     float hw3_setspeed_last_kph;      // last observed DAS_setSpeed
     uint32_t hw3_setspeed_trigger_ms; // millis() of last candidate trigger
