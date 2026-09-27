@@ -239,6 +239,16 @@ typedef struct FSDState {
     uint32_t hw3_slew_count;         // downward slew update count
     uint32_t hw3_slew_last_ms;
 
+    // Experimental set-speed trigger gate: infer a possible touchscreen/set-speed
+    // action from a meaningful change in DAS_control (0x2B9) DAS_setSpeed. When
+    // enabled, V13 custom target offset is only applied for a short window after
+    // such a change. We never modify 0x2B9 in this experiment.
+    bool hw3_setspeed_gate;           // opt-in, default OFF
+    bool hw3_setspeed_seen;           // baseline sample captured
+    float hw3_setspeed_last_kph;      // last observed DAS_setSpeed
+    uint32_t hw3_setspeed_trigger_ms; // millis() of last candidate trigger
+    uint32_t hw3_setspeed_trigger_count;
+
     // --- DAS_control (0x2B9) — ACC / longitudinal state ---
     uint8_t das_acc_state;       // 0-15 (0=cancel, 3=hold, 4=ACC_ON, 9=pause)
     float das_set_speed_kph;     // set cruise speed (0.1 kph resolution)
