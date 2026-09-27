@@ -60,6 +60,9 @@ void prefs_load(FSDState *state) {
     state->op_mode = (OpMode)g_prefs.getUChar("mode", (uint8_t)OpMode_ListenOnly);
     // Manual HW selection (#110); TeslaHW_Unknown = auto-detect.
     state->hw_override = (TeslaHWVersion)g_prefs.getUChar("hwov", (uint8_t)TeslaHW_Unknown);
+    state->fsd_protocol_mode = g_prefs.getUChar("fsdproto", 0);
+    if (state->fsd_protocol_mode != 13 && state->fsd_protocol_mode != 14)
+        state->fsd_protocol_mode = 0;
 
     // BSB CN HW3 driving style: 0=Auto, 1=Chill, 2=Normal, 3=Hurry.
     state->hw3_drive_style = g_prefs.getUChar("h3style", 0);
@@ -164,6 +167,7 @@ void prefs_save(const FSDState *state) {
 
     g_prefs.putUChar("mode",  (uint8_t)state->op_mode);
     g_prefs.putUChar("hwov",  (uint8_t)state->hw_override);   // manual HW selection (#110)
+    g_prefs.putUChar("fsdproto", state->fsd_protocol_mode);
 
     // BSB CN HW3 driving style
     g_prefs.putUChar("h3style", state->hw3_drive_style);
