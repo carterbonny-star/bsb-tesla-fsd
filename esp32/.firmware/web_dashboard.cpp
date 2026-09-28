@@ -782,7 +782,9 @@ R"rawliteral(
   <div id="httpLogInfo" class="log-info">Ready to collect a candump file in this browser.</div>
   <div class="log-actions">
     <button id="btnHttpLog" type="button" class="btn-main btn-blue" onclick="toggleHttpLog()">STREAM LOG AND SAVE</button>
+    <button id="btnMarkTap" type="button" class="btn-main btn-yellow" onclick="markHttpTap()" disabled style="margin-top:8px">MARK TAP</button>
   </div>
+  <div id="httpTapInfo" class="log-info" style="margin-top:8px">Start logging, then tap MARK TAP immediately after touching the Tesla speed/limit area. The marker is written into the saved .dump as a #-comment.</div>
 </div>
 
 <!-- WiFi Config -->
@@ -896,7 +898,7 @@ R"rawliteral(</div>
 <script>
 var ws,rt,busy=0,wifiOnce=false,authHeader='',authAction=null,restartAnchor=null;
 var httpLogAbort=null,httpLogReader=null,httpLogParts=[],httpLogBytes=0,httpLogStarted=0,httpLogRunning=false;
-var httpLogName='',httpLogReady=false,httpLogSaveUrl='';
+var httpLogName='',httpLogReady=false,httpLogSaveUrl='',httpLogTapCount=0;
 var httpLogAllowed=true;
 var HW=['Unknown','Legacy','HW3','HW4'];
 var CIRC=326.73;
@@ -1495,6 +1497,24 @@ function setHttpLogUi(running){
   pill('httpLogSt',running||httpLogReady,running?'Collecting':(httpLogReady?'Ready':'Idle'));
 }
 
+function syncMarkTapUi(){
+  var b=document.getElementById('btnMarkTap');
+  if(b)b.disabled=!httpLogRunning;
+}
+function markHttpTap(){
+  if(!httpLogRunning)return;
+  var ms=Math.max(0,Date.now()-httpLogStarted);
+  httpLogTapCount++;
+  var sec=(ms/1000).toFixed(3);
+  var line='# MARK TAP '+httpLogTapCount+' browser_elapsed='+sec+'s\r\n';
+  var bytes=new TextEncoder().encode(line);
+  httpLogParts.push(bytes);
+  httpLogBytes+=bytes.length;
+  var info=document.getElementById('httpTapInfo');
+  if(info)info.textContent='MARK TAP '+httpLogTapCount+' recorded at ~'+sec+' s.';
+  logInfo('MARK TAP '+httpLogTapCount+' at ~'+sec+'s; continue driving/recording.','var(--yellow)');
+}
+
 function formatBytes(n){
   if(n<1024)return n+' B';
   if(n<1048576)return (n/1024).toFixed(1)+' KB';
@@ -1576,6 +1596,7 @@ function stopHttpLog(reason){
   if(httpLogAbort)httpLogAbort.abort();
   httpLogReader=null;
   httpLogAbort=null;
+  syncMarkTapUi();
   prepareHttpLogFile();
   if(reason){
     if(httpLogReady){
@@ -1599,11 +1620,15 @@ function startHttpLog(){
   }
   httpLogParts=[];
   httpLogBytes=0;
+  httpLogTapCount=0;
   clearHttpLogBlob();
   httpLogStarted=Date.now();
   httpLogRunning=true;
   httpLogAbort=new AbortController();
   setHttpLogUi(true);
+  syncMarkTapUi();
+  var tapInfo=document.getElementById('httpTapInfo');
+  if(tapInfo)tapInfo.textContent='Logging active. Tap MARK TAP immediately after touching the Tesla speed/limit area.';
   logInfo('Connecting to HTTP stream...');
 
   var streamUrl='http://'+location.hostname+':82/stream';
@@ -1637,6 +1662,7 @@ function startHttpLog(){
       httpLogRunning=false;
       httpLogReader=null;
       httpLogAbort=null;
+      syncMarkTapUi();
       setHttpLogUi(false);
       logInfo('Stream stopped: '+(err&&err.message?err.message:'connection closed'),'var(--yellow)');
       if(httpLogBytes>0)prepareHttpLogFile();
