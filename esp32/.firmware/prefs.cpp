@@ -68,6 +68,17 @@ void prefs_load(FSDState *state) {
     state->hw3_drive_style = g_prefs.getUChar("h3style", 0);
     if (state->hw3_drive_style > 3) state->hw3_drive_style = 0;
 
+    // Source-matched smart offset settings
+    state->hw3_offset_mode = g_prefs.getUChar("off_mod", 1);
+    if (state->hw3_offset_mode > 2) state->hw3_offset_mode = 1;
+    state->hw3_manual_offset = g_prefs.getUChar("man_off", 0);
+    if (state->hw3_manual_offset > 63) state->hw3_manual_offset = 63;
+    state->hw3_custom_pct[0] = g_prefs.getUChar("cp1", 30);
+    state->hw3_custom_pct[1] = g_prefs.getUChar("cp2", 20);
+    state->hw3_custom_pct[2] = g_prefs.getUChar("cp3", 10);
+    state->hw3_custom_pct[3] = g_prefs.getUChar("cp4", 10);
+    for (int i = 0; i < 4; ++i) if (state->hw3_custom_pct[i] > 63) state->hw3_custom_pct[i] = 63;
+
     // v1.4.33-style speed offset settings
     state->hw3_auto_speed = g_prefs.getBool("h3auto", false);
     state->hw3_custom_speed = g_prefs.getBool("h3cust", false);
@@ -171,6 +182,14 @@ void prefs_save(const FSDState *state) {
 
     // BSB CN HW3 driving style
     g_prefs.putUChar("h3style", state->hw3_drive_style);
+
+    // Source-matched smart offset settings
+    g_prefs.putUChar("off_mod", state->hw3_offset_mode);
+    g_prefs.putUChar("man_off", state->hw3_manual_offset);
+    g_prefs.putUChar("cp1", state->hw3_custom_pct[0]);
+    g_prefs.putUChar("cp2", state->hw3_custom_pct[1]);
+    g_prefs.putUChar("cp3", state->hw3_custom_pct[2]);
+    g_prefs.putUChar("cp4", state->hw3_custom_pct[3]);
 
     // v1.4.33-style speed offset settings
     g_prefs.putBool("h3auto", state->hw3_auto_speed);
