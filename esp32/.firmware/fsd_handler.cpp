@@ -74,6 +74,14 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     // BSB CN: HW3 driving style + v1.4.33 speed-offset defaults.
     state->fsd_protocol_mode = 0;
     state->hw3_drive_style = 0;
+    state->hw3_offset_mode = 1;
+    state->hw3_manual_offset = 0;
+    state->hw3_custom_pct[0] = 30;
+    state->hw3_custom_pct[1] = 20;
+    state->hw3_custom_pct[2] = 10;
+    state->hw3_custom_pct[3] = 10;
+    state->hw3_smooth_target_kph = 0.0f;
+    state->hw3_smooth_last_ms = 0;
     state->speed_profile_locked = false;
     state->hw3_auto_speed = false;
     state->hw3_custom_speed = false;
