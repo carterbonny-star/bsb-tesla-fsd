@@ -1,5 +1,9 @@
 # BSB Tesla FSD 中文增强版
 
+> **当前分支为研究/台架版：所有 ESP32 环境编译期禁用物理 CAN TX。**
+> 智能速度偏移、三种模式、分档 cap、3 km/h/s 下降、V13/V14 字段及双总线路径只产生 mock 输出。
+> 构建、源码对应关系、行为边界和回放方法见 [研究说明](docs/research-bench.md)。下方历史功能说明不代表本版可以进行真实车辆控制。
+
 > 本分支由 **carterbonny-star** 基于上游 `hypery11/flipper-tesla-fsd` 维护。  
 > 项目主页：https://github.com/carterbonny-star/bsb-tesla-fsd
 

@@ -1,5 +1,7 @@
 [English](README.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md)
 
+> **Research branch:** every ESP32 build has physical CAN TX compiled out. Active mode only computes mock output. See [research/bench documentation](docs/research-bench.md) for source semantics, replay and build verification. Historical vehicle-control instructions below do not apply to these research binaries.
+
 # Tesla Mod for Flipper Zero
 
 [![GitHub stars](https://img.shields.io/github/stars/hypery11/flipper-tesla-fsd?style=flat-square&logo=github)](https://github.com/hypery11/flipper-tesla-fsd/stargazers)

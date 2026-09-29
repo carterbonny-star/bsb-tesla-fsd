@@ -230,6 +230,22 @@ typedef struct FSDState {
     uint8_t hw3_custom_pct[4];     // <=50, <=70, <=100, >100 km/h
     float hw3_smooth_target_kph;   // runtime smoothed target speed
     uint32_t hw3_smooth_last_ms;   // runtime smoothing timestamp
+    char research_gear;
+    bool research_engaged;
+    bool research_heartbeat_seen;
+    uint32_t research_heartbeat_ms;
+    bool research_smooth_valid;
+    uint8_t research_profile;
+    uint8_t research_protocol_detected;
+    bool research_protocol_locked;
+    uint8_t research_3fd_count;
+    float research_target_kph;
+    float research_cap_kph;
+    uint32_t research_mock_count[2];
+    uint32_t research_last_mock_id;
+    uint8_t research_last_mock_bus;
+    uint8_t research_last_mock_dlc;
+    uint8_t research_last_mock_data[8];
 
     // Legacy speed-offset settings retained for compatibility with older UI/NVS.
     // HW3/V13: automatic/custom target-speed logic for posted limits, optional
@@ -245,14 +261,6 @@ typedef struct FSDState {
     uint8_t hw3_offset_last;         // transmitted percentage offset, runtime
     uint32_t hw3_slew_count;         // downward slew update count
     uint32_t hw3_slew_last_ms;
-
-    // Read-only set-speed event detector: infer a possible touchscreen/set-speed
-    // action from a meaningful change in DAS_control (0x2B9) DAS_setSpeed.
-    // Diagnostic only: never modifies 0x2B9 or gates CAN injection.
-    bool hw3_setspeed_seen;           // baseline sample captured
-    float hw3_setspeed_last_kph;      // last observed DAS_setSpeed
-    uint32_t hw3_setspeed_trigger_ms; // millis() of last candidate trigger
-    uint32_t hw3_setspeed_trigger_count;
 
     // --- DAS_control (0x2B9) — ACC / longitudinal state ---
     uint8_t das_acc_state;       // 0-15 (0=cancel, 3=hold, 4=ACC_ON, 9=pause)

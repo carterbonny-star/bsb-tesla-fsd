@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "fsd_handler.h"  // esp32/.firmware/fsd_handler.h (first on the include path)
+#include "../esp32/.firmware/fsd_handler.h"
 #include "fsd_ota.h"      // shared reference: fsd_ota_update()
 
 static int g_pass = 0;

@@ -1,0 +1,17 @@
+# Synthetic data only: D, engagement heartbeat, 60 km/h limit, profile, mux2.
+replay 1000 can0 118#0000800000000000
+replay 1000 can0 389#FF02000000000000
+replay 1000 can0 399#000C000000000000
+replay 1000 can0 3F8#0000000000400000
+replay 1000 can0 3FD#0200000000000000
+# Secondary bus must not change primary protocol state.
+replay 1200 can1 399#0006000000000000
+# Step down to 50, then 500ms slew updates, with fresh heartbeat.
+replay 1500 can0 399#000A000000000000
+replay 1500 can0 3FD#0200000000000000
+replay 2000 can0 399#000A000000000000
+replay 2000 can0 3FD#0200000000000000
+replay 2500 can0 389#FF02000000000000
+replay 2500 can0 399#000A000000000000
+replay 2500 can0 3FD#0000000000000000
+replay 2500 can0 3FD#0100000000000000

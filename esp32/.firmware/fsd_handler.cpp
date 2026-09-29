@@ -15,7 +15,7 @@
 #include "../../fsd_logic/fsd_can_ops.h"   // shared stateless frame primitives (set_bit / mux / fsd-selected)
 #include "../../fsd_logic/fsd_ota.h"       // shared 0x318 OTA-install detection (flag vs rolling counter)
 #include <string.h>
-#include <Arduino.h>
+#include "../../fsd_logic/research_speed.h"
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -82,6 +82,9 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     state->hw3_custom_pct[3] = 10;
     state->hw3_smooth_target_kph = 0.0f;
     state->hw3_smooth_last_ms = 0;
+    state->research_profile = 2;
+    state->research_protocol_detected = 14;
+    state->research_gear = '?';
     state->speed_profile_locked = false;
     state->hw3_auto_speed = false;
     state->hw3_custom_speed = false;
@@ -97,10 +100,6 @@ void fsd_state_init(FSDState *state, TeslaHWVersion hw) {
     state->hw3_offset_last = 0;
     state->hw3_slew_count = 0;
     state->hw3_slew_last_ms = 0;
-    state->hw3_setspeed_seen = false;
-    state->hw3_setspeed_last_kph = 0.0f;
-    state->hw3_setspeed_trigger_ms = 0;
-    state->hw3_setspeed_trigger_count = 0;
     state->hw4_offset = 0;
 
     strncpy(state->wifi_ssid, "Tesla-FSD", sizeof(state->wifi_ssid));
@@ -309,223 +308,9 @@ bool fsd_handle_track_mode_inject(FSDState *state, CanFrame *frame) {
     return true;
 }
 
-// ── v1.4.33-style speed offset controller ────────────────────────────────────
-static int hw3_limit_bucket_lt80(float limit_kph) {
-    int rounded = (int)(limit_kph + 0.5f);
-    if (rounded < 35) return 0;
-    if (rounded < 45) return 1;
-    if (rounded < 55) return 2;
-    if (rounded < 65) return 3;
-    return 4;
-}
-
-static int hw3_limit_bucket_hi(float limit_kph) {
-    int rounded = (int)(limit_kph + 0.5f);
-    if (rounded < 85) return 0;
-    if (rounded < 95) return 1;
-    if (rounded < 105) return 2;
-    if (rounded < 115) return 3;
-    return 4;
-}
-
-static uint8_t hw3_target_to_pct(float limit_kph, float target_kph) {
-    if (limit_kph < 1.0f || target_kph <= limit_kph) return 0;
-    float pct = ((target_kph - limit_kph) * 100.0f) / limit_kph;
-    if (pct < 0.0f) pct = 0.0f;
-    if (pct > 50.0f) pct = 50.0f;
-    return (uint8_t)(pct + 0.5f);
-}
-
-static uint8_t hw3_compute_desired_offset(FSDState *state, uint8_t stock_pct) {
-    if (!state->speed_limit_seen || state->speed_limit_kph < 10.0f) return stock_pct;
-    float limit = state->speed_limit_kph;
-    uint8_t desired = stock_pct;
-    if (limit < 80.0f) {
-        if (state->hw3_custom_speed) {
-            int b = hw3_limit_bucket_lt80(limit);
-            desired = hw3_target_to_pct(limit, (float)state->hw3_custom_target[b]);
-        } else if (state->hw3_auto_speed) {
-            static const uint8_t profile_target[3] = {64, 85, 100};
-            int p = state->speed_profile;
-            if (p < 0) p = 0;
-            if (p > 2) p = 2;
-            desired = hw3_target_to_pct(limit, (float)profile_target[p]);
-        }
-    } else if (state->hw3_high_speed_enable) {
-        int b = hw3_limit_bucket_hi(limit);
-        desired = state->hw3_high_speed_pct[b];
-        if (desired > 50) desired = 50;
-    }
-    return desired;
-}
-
-static uint8_t hw3_apply_slew(FSDState *state, uint8_t desired) {
-    state->hw3_offset_target = desired;
-    if (!state->hw3_offset_slew || desired >= state->hw3_offset_last) {
-        state->hw3_offset_last = desired;
-        state->hw3_slew_last_ms = millis();
-        return desired;
-    }
-    uint32_t now = millis();
-    if (state->hw3_slew_last_ms == 0) state->hw3_slew_last_ms = now;
-    uint32_t elapsed = now - state->hw3_slew_last_ms;
-    uint32_t step = ((uint32_t)state->hw3_slew_rate * elapsed) / 1000u;
-    if (step == 0) return state->hw3_offset_last;
-    uint8_t current = state->hw3_offset_last;
-    uint8_t next = (step >= (uint32_t)(current - desired)) ? desired : (uint8_t)(current - step);
-    if (next != current) state->hw3_slew_count++;
-    state->hw3_offset_last = next;
-    state->hw3_slew_last_ms = now;
-    return next;
-}
-
-// ── HW3/HW4 autopilot control (DAS_autopilotControl 0x3FD) ───────────────────
-
+// Source-matched calculation; physical transmission is disabled in can_driver.cpp.
 bool fsd_handle_autopilot_frame(FSDState *state, CanFrame *frame) {
-    if (frame->dlc < 8) return false;
-    // Only process known HW versions to avoid corrupting frames for HW_Unknown
-    if (state->hw_version != TeslaHW_HW3 && state->hw_version != TeslaHW_HW4)
-        return false;
-
-    uint8_t mux     = read_mux_id(frame);
-    bool    fsd_ui  = is_fsd_selected(frame, state->force_fsd, state->china_mode);
-    bool    modified = false;
-
-    // mux 0 is the authoritative "is FSD requested" mux
-    if (mux == CAN_MUX_0) state->fsd_enabled = fsd_ui;
-
-    // bit38 explicit TLSSC enable on mux0 (complementary to 0x331 TLSSC Restore)
-    if (mux == CAN_MUX_0 && state->assist_tlssc_bit38 && state->fsd_enabled) {
-        set_bit(frame, SIG_AP_TLSSC_BIT38, true);
-        modified = true;
-    }
-
-    // bit39 continue-on-green with lead car (ev-open-can-tools TSLLC plugin);
-    // same 0x3FD mux0 frame on HW3/HW4, so apply before the HW split; pairs with TLSSC
-    if (mux == CAN_MUX_0 && state->continue_on_green && state->fsd_enabled) {
-        set_bit(frame, SIG_AP_CONTINUE_ON_GREEN_BIT, true);   // bit39 continue-on-green
-        modified = true;
-    }
-
-    if (fsd_protocol_is_v13(state)) {
-        // ── V13 protocol ─────────────────────────────────────────────────────
-        if (mux == CAN_MUX_0 && state->fsd_unlock && state->fsd_enabled) {
-            // Compute speed offset from current speed signal (bits 6:1 of byte 3)
-            int raw = (int)((frame->data[SIG_AP_HW3_SPEED_RAW_BYTE] >>
-                             SIG_AP_HW3_SPEED_RAW_SHIFT) &
-                            SIG_AP_HW3_SPEED_RAW_MASK) - SIG_AP_HW3_SPEED_RAW_ZERO;
-            int offset = raw * SIG_AP_HW3_SPEED_OFFSET_STEP;
-            if (offset < SIG_AP_HW3_SPEED_OFFSET_MIN) offset = SIG_AP_HW3_SPEED_OFFSET_MIN;
-            if (offset > SIG_AP_HW3_SPEED_OFFSET_MAX) offset = SIG_AP_HW3_SPEED_OFFSET_MAX;
-            uint8_t desired = hw3_compute_desired_offset(state, (uint8_t)offset);
-            state->speed_offset = (int)hw3_apply_slew(state, desired);
-
-            // Activate FSD: set bit 46
-            set_bit(frame, SIG_AP_FSD_ENABLE_BIT, true);
-
-            // Write speed profile into bits 2:1 of byte 6
-            frame->data[SIG_AP_SPEED_PROFILE_BYTE] &= (uint8_t)(~SIG_AP_SPEED_PROFILE_MASK);
-            frame->data[SIG_AP_SPEED_PROFILE_BYTE] |=
-                (uint8_t)((state->speed_profile & SIG_AP_SPEED_PROFILE_VALUE_MASK) <<
-                          SIG_AP_SPEED_PROFILE_SHIFT);
-            modified = true;
-        }
-        if (mux == CAN_MUX_1 &&
-            (state->nag_killer || state->summon_unlock || state->assist_telemetry_off ||
-             state->apmv3_branch <= 5)) {
-            if (state->nag_killer) {
-                // Nag suppression via bit 19 (clear = no hands-on-wheel request)
-                set_bit(frame, SIG_AP_NAG_CLEAR_BIT, false);
-                state->nag_suppressed = true;
-                modified = true;
-            }
-            if (state->summon_unlock) {
-                set_bit(frame, SIG_AP_NAG_CLEAR_BIT, false);       // bit19 EU restriction clear
-                set_bit(frame, SIG_AP_HW4_NAG_CONFIRM_BIT, true);  // bit47 summon enable
-                modified = true;
-            }
-            // Telemetry Off (experimental): clear reachable DAS_autopilotControl mux1
-            // telemetry flags — bit48 UI_enableCabinCameraTelemetry, bit50
-            // UI_autopilotTelemetryInChina. Plain bit-clears, no checksum.
-            if (state->assist_telemetry_off) {
-                set_bit(frame, 48, false);
-                set_bit(frame, 50, false);
-                modified = true;
-            }
-            // AP branch/tier selector (experimental, non-persistent): UI_apmv3Branch
-            // bits 40-42 = byte5 bits 0-2. 0xFF sentinel = OFF (leave untouched).
-            if (state->apmv3_branch <= 5) {
-                frame->data[5] = (uint8_t)((frame->data[5] & ~0x07) | (state->apmv3_branch & 0x07));
-                modified = true;
-            }
-        }
-        if (mux == CAN_MUX_2 && state->fsd_unlock && state->fsd_enabled) {
-            // Write speed offset into bits 7:6 of byte 0 and bits 5:0 of byte 1
-            frame->data[SIG_AP_HW3_SPEED_OFFSET_LOW_BYTE] &=
-                (uint8_t)(~SIG_AP_HW3_SPEED_OFFSET_LOW_MASK);
-            frame->data[SIG_AP_HW3_SPEED_OFFSET_HIGH_BYTE] &=
-                (uint8_t)(~SIG_AP_HW3_SPEED_OFFSET_HIGH_MASK);
-            frame->data[SIG_AP_HW3_SPEED_OFFSET_LOW_BYTE] |=
-                (uint8_t)((state->speed_offset & SIG_AP_HW3_SPEED_OFFSET_LOW_VALUE_MASK) <<
-                          SIG_AP_HW3_SPEED_OFFSET_LOW_SHIFT);
-            frame->data[SIG_AP_HW3_SPEED_OFFSET_HIGH_BYTE] |=
-                (uint8_t)(state->speed_offset >> SIG_AP_HW3_SPEED_OFFSET_HIGH_SHIFT);
-            modified = true;
-        }
-    } else {
-        // ── V14 protocol ─────────────────────────────────────────────────────
-        if (mux == CAN_MUX_0 && state->fsd_unlock && state->fsd_enabled) {
-            set_bit(frame, SIG_AP_FSD_ENABLE_BIT, true);       // FSD activation
-            set_bit(frame, SIG_AP_HW4_FSD_ENABLE_BIT, true);   // HW4 additional FSD bit
-            if (state->emergency_vehicle_detect)
-                set_bit(frame, SIG_AP_HW4_EMERGENCY_VEHICLE_BIT, true);
-            modified = true;
-        }
-        if (mux == CAN_MUX_1 &&
-            (state->nag_killer || state->summon_unlock || state->assist_telemetry_off ||
-             state->apmv3_branch <= 5)) {
-            if (state->nag_killer) {
-                set_bit(frame, SIG_AP_NAG_CLEAR_BIT, false);      // clear hands-on-wheel nag
-                set_bit(frame, SIG_AP_HW4_NAG_CONFIRM_BIT, true); // HW4 nag-suppression confirmation bit
-                state->nag_suppressed = true;
-                modified = true;
-            }
-            if (state->summon_unlock) {
-                set_bit(frame, SIG_AP_NAG_CLEAR_BIT, false);       // bit19 EU restriction clear
-                set_bit(frame, SIG_AP_HW4_NAG_CONFIRM_BIT, true);  // bit47 summon enable
-                modified = true;
-            }
-            // Telemetry Off (experimental): clear reachable DAS_autopilotControl mux1
-            // telemetry flags — bit48 UI_enableCabinCameraTelemetry, bit50
-            // UI_autopilotTelemetryInChina. Plain bit-clears, no checksum.
-            if (state->assist_telemetry_off) {
-                set_bit(frame, 48, false);
-                set_bit(frame, 50, false);
-                modified = true;
-            }
-            // AP branch/tier selector (experimental, non-persistent): UI_apmv3Branch
-            // bits 40-42 = byte5 bits 0-2. 0xFF sentinel = OFF (leave untouched).
-            if (state->apmv3_branch <= 5) {
-                frame->data[5] = (uint8_t)((frame->data[5] & ~0x07) | (state->apmv3_branch & 0x07));
-                modified = true;
-            }
-        }
-        if (mux == CAN_MUX_2 && state->fsd_unlock) {
-            // Write speed profile into bits 6:4 of byte 7
-            frame->data[SIG_AP_HW4_SPEED_PROFILE_BYTE] &=
-                (uint8_t)(~(SIG_AP_HW4_SPEED_PROFILE_MASK << SIG_AP_HW4_SPEED_PROFILE_SHIFT));
-            frame->data[SIG_AP_HW4_SPEED_PROFILE_BYTE] |=
-                (uint8_t)((state->speed_profile & SIG_AP_HW4_SPEED_PROFILE_MASK) <<
-                          SIG_AP_HW4_SPEED_PROFILE_SHIFT);
-            if (state->hw4_offset > 0) {
-                frame->data[1] = (uint8_t)((frame->data[1] & 0xC0u) | (state->hw4_offset & 0x3Fu));
-            }
-            modified = true;
-        }
-    }
-
-    if (modified) state->frames_modified++;
-    return modified;
+    return research_calculate(state, 0, frame) != 0;
 }
 
 // ── Legacy autopilot (DAS_autopilot 0x3EE) ───────────────────────────────────

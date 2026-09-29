@@ -418,7 +418,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 
 <!-- HTTP CAN Log: kept expanded near the top for speed-offset validation -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-d">L</div><h2>HTTP CAN Log / MARK TAP</h2>
+  <div class="card-head"><div class="icon ic-d">L</div><h2>CAN 研究日志</h2>
     <span class="pill off" id="httpLogSt" style="margin-left:auto"><span class="pd"></span>Idle</span>
   </div>
   <div class="row">
@@ -443,15 +443,13 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
       <div><span class="lbl">399 候选限速</span><br><b id="diag399Limit" style="font-size:1.15em">--</b> km/h</div>
       <div><span class="lbl">399 Raw</span><br><b id="diag399Raw" style="font-size:1.15em">--</b></div>
       <div><span class="lbl">3FD Mux</span><br><b id="diag3fdMux" style="font-size:1.15em">--</b></div>
-      <div><span class="lbl">Mux2 Offset</span><br><b id="diag3fdOffset" style="font-size:1.15em">--</b>%</div>
-      <div><span class="lbl">Mux2 Profile</span><br><b id="diag3fdProfile" style="font-size:1.15em">--</b></div>
+      <div><span class="lbl">输入 Offset</span><br><b id="diag3fdOffset" style="font-size:1.15em">--</b>%</div>
+      <div><span class="lbl">输入 Profile</span><br><b id="diag3fdProfile" style="font-size:1.15em">--</b></div>
       <div><span class="lbl">3F8 Follow</span><br><b id="diag3f8Follow" style="font-size:1.15em">--</b></div>
     </div>
     <div class="hint" style="margin-top:8px">测试版：关键速度偏移诊断常驻显示，方便边抓包边观察。</div>
   </div>
-  <button id="btnMarkTap" type="button" class="btn-main btn-yellow" onclick="markHttpTap()" disabled style="margin:10px 0 8px;font-size:1.08em">MARK TAP</button>
   <button id="btnHttpLog" type="button" class="btn-main btn-blue" onclick="toggleHttpLog()">STREAM LOG AND SAVE</button>
-  <div id="httpTapInfo" class="log-info" style="margin-top:4px">Start logging, then press MARK TAP immediately after the event you want to align. The marker is written into the saved .dump as a #-comment.</div>
 </div>
 
 <!-- Battery / BMS diagnostics -->
@@ -491,10 +489,10 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 
 <!-- CAN Stats -->
 <div class="card">
-  <div class="card-head"><div class="icon ic-d">C</div><h2>CAN 总线</h2></div>
+  <div class="card-head"><div class="icon ic-d">C</div><h2>CAN 总线（只监听；输出为 mock）</h2></div>
   <div class="sg">
     <div class="sb"><div class="sv" id="rxCnt">0</div><div class="sl">接收帧</div></div>
-    <div class="sb"><div class="sv" id="txCnt">0</div><div class="sl">发送帧</div></div>
+    <div class="sb"><div class="sv" id="txCnt">0</div><div class="sl">物理发送帧（始终 0）</div></div>
     <div class="sb"><div class="sv" id="crcErr">0</div><div class="sl">CAN 错误</div><div class="sl" id="crcSplit">RX&nbsp;missed&nbsp;0 &middot; bus&nbsp;0 &middot; TX&nbsp;fail&nbsp;0</div></div>
     <div class="sb"><div class="sv" id="fps">0.0</div><div class="sl">帧/秒</div></div>
   </div>
@@ -525,47 +523,32 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     </select>
   </div>
   <div class="row" id="rowDriveStyle">
-    <span class="lbl">驾驶风格<br><span class="hint">V13：自动跟随原车，或锁定轻松 / 普通 / 迅驰</span></span>
+    <span class="lbl">驾驶风格<br><span class="hint">源码映射：自动跟随，或锁定 0–4；V13 写入低 2 位</span></span>
     <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
       <option value="0">自动（跟随原车）</option>
       <option value="1">轻松</option>
       <option value="2">普通</option>
-      <option value="3">迅驰</option>
+      <option value="3">运动（2）</option>
+      <option value="4">狂飙（3）</option>
+      <option value="5">极限（4）</option>
     </select>
   </div>
   <div class="row speed-offset">
-    <span class="lbl">限速偏移<br><span class="hint">参考 v1.4.33；V13 使用自动/自定义目标，V14 使用手动 raw。</span></span>
+    <span class="lbl">智能速度偏移<br><span class="hint">研究计算；物理 CAN TX 永久禁用</span></span>
     <div style="flex:1;min-width:0">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:.78em;color:var(--text2);margin-bottom:8px">
-        <span>限速 <b id="spdLimitNow">--</b> km/h</span>
-        <span>目标偏移 <b id="spdOffTarget">--</b>%</span>
-        <span>当前偏移 <b id="spdOffNow">--</b>%</span>
+      <div class="row"><span class="lbl">模式</span><select id="offsetMode" onchange="cmd('hw3_offset_mode',parseInt(this.value,10))"><option value="0">手动</option><option value="1">自动</option><option value="2">自定义</option></select></div>
+      <div class="row"><span class="lbl">手动偏移 %</span><input id="manualOffset" type="number" min="0" max="63" onchange="speedNum('hw3_manual_offset',this,0,63)"></div>
+      <div class="speed-bands">
+        <label class="speed-band">≤50 km/h <input id="cp0" type="number" min="0" max="63" onchange="speedNum('hw3_cp0',this,0,63)">%</label>
+        <label class="speed-band">≤70 km/h <input id="cp1" type="number" min="0" max="63" onchange="speedNum('hw3_cp1',this,0,63)">%</label>
+        <label class="speed-band">≤100 km/h <input id="cp2" type="number" min="0" max="63" onchange="speedNum('hw3_cp2',this,0,63)">%</label>
+        <label class="speed-band">&gt;100 km/h <input id="cp3" type="number" min="0" max="63" onchange="speedNum('hw3_cp3',this,0,63)">%</label>
       </div>
-
-      <div id="speedHw3Panel">
-        <div class="row" style="padding:6px 0"><span class="lbl">V13 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
-        <div class="row" style="padding:6px 0"><span class="lbl">V13 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
-        <div class="speed-bands">
-          <label class="speed-band"><span>限速 30 km/h</span><span class="speed-value">目标 <input id="h3ct0" type="number" min="30" max="45" onchange="speedNum('hw3_ct0',this,30,45)"><span>km/h</span></span></label>
-          <label class="speed-band"><span>限速 40 km/h</span><span class="speed-value">目标 <input id="h3ct1" type="number" min="40" max="60" onchange="speedNum('hw3_ct1',this,40,60)"><span>km/h</span></span></label>
-          <label class="speed-band"><span>限速 50 km/h</span><span class="speed-value">目标 <input id="h3ct2" type="number" min="50" max="75" onchange="speedNum('hw3_ct2',this,50,75)"><span>km/h</span></span></label>
-          <label class="speed-band"><span>限速 60 km/h</span><span class="speed-value">目标 <input id="h3ct3" type="number" min="60" max="90" onchange="speedNum('hw3_ct3',this,60,90)"><span>km/h</span></span></label>
-          <label class="speed-band"><span>限速 70 km/h</span><span class="speed-value">目标 <input id="h3ct4" type="number" min="70" max="105" onchange="speedNum('hw3_ct4',this,70,105)"><span>km/h</span></span></label>
-        </div>
-        <div class="row" style="padding:6px 0"><span class="lbl">平滑下降<br><span class="hint">降低偏移时缓慢变化，提高偏移立即生效</span></span><label class="sw"><input type="checkbox" id="swH3Slew" onchange="cmd('hw3_offset_slew',this.checked)"><span class="sl2"></span></label></div>
-        <div class="row" style="padding:6px 0"><span class="lbl">下降速率 %/s</span><input id="h3SlewRate" type="number" min="1" max="25" style="width:70px" onchange="speedNum('hw3_slew_rate',this,1,25)"></div>
-        <div class="row" style="padding:6px 0"><span class="lbl">≥80 高速百分比偏移</span><label class="sw"><input type="checkbox" id="swH3High" onchange="cmd('hw3_high_speed_enable',this.checked)"><span class="sl2"></span></label></div>
-        <div class="speed-bands">
-          <label class="speed-band"><span>限速 80 km/h</span><span class="speed-value">偏移 + <input id="h3hs0" type="number" min="0" max="50" onchange="speedNum('hw3_hs0',this,0,50)"><span>%</span></span></label>
-          <label class="speed-band"><span>限速 90 km/h</span><span class="speed-value">偏移 + <input id="h3hs1" type="number" min="0" max="50" onchange="speedNum('hw3_hs1',this,0,50)"><span>%</span></span></label>
-          <label class="speed-band"><span>限速 100 km/h</span><span class="speed-value">偏移 + <input id="h3hs2" type="number" min="0" max="50" onchange="speedNum('hw3_hs2',this,0,50)"><span>%</span></span></label>
-          <label class="speed-band"><span>限速 110 km/h</span><span class="speed-value">偏移 + <input id="h3hs3" type="number" min="0" max="50" onchange="speedNum('hw3_hs3',this,0,50)"><span>%</span></span></label>
-          <label class="speed-band"><span>限速 120+ km/h</span><span class="speed-value">偏移 + <input id="h3hs4" type="number" min="0" max="50" onchange="speedNum('hw3_hs4',this,0,50)"><span>%</span></span></label>
-        </div>
-      </div>
-      <div id="speedHw4Panel">
-        <div class="row" style="padding:6px 0"><span class="lbl">HW4 偏移 raw<br><span class="hint">0=关闭；1~21</span></span><input id="h4off" type="number" min="0" max="21" style="width:70px" onchange="speedNum('hw4_offset',this,0,21)"></div>
-      </div>
+      <p class="hint">15–45 km/h 使用源码固定规则，优先于上述模式。自动：50–60 +50%，70–90 +30%，100–110 +20%，120 +10%。</p>
+      <p class="hint">目标 cap：15–40→60，45→67，50→75，55→82，60→90，70→91，80→104，90→117，100→120，110–120→132 km/h。</p>
+      <p class="hint">下降 3 km/h/s；至少 0.5 秒更新一次，单次按最多 1 秒计算。cap 先于平滑下降应用，下降期间平滑值可暂时超过新 cap。</p>
+      <div>限速 <b id="spdLimitNow">--</b> · 目标偏移 <b id="spdOffTarget">--</b>% · 当前 <b id="spdOffNow">--</b>%</div>
+      <div id="researchValues">等待回放</div>
     </div>
   </div>
   <div class="row">
@@ -899,7 +882,7 @@ R"rawliteral(</div>
 <script>
 var ws,rt,busy=0,wifiOnce=false,authHeader='',authAction=null,restartAnchor=null;
 var httpLogAbort=null,httpLogReader=null,httpLogParts=[],httpLogBytes=0,httpLogStarted=0,httpLogRunning=false;
-var httpLogName='',httpLogReady=false,httpLogSaveUrl='',httpLogTapCount=0;
+var httpLogName='',httpLogReady=false,httpLogSaveUrl='';
 var httpLogAllowed=true;
 var HW=['Unknown','Legacy','HW3','HW4'];
 var CIRC=326.73;
@@ -1067,7 +1050,7 @@ function upd(d){
   // Status
   var apActive=!!d.ap_active;
   pill('fsdSt', apActive, apActive?'已激活':'等待');
-  pill('opMode', d.op_mode===1, d.op_mode===1?'Active（发送）':'Listen-Only（只监听）');
+  pill('opMode', d.op_mode===1, d.op_mode===1?'模拟计算（物理 TX 禁用）':'只监听（物理 TX 禁用）');
 
   var hwEl=document.getElementById('hwVer');
   if(hwEl){
@@ -1115,7 +1098,7 @@ function upd(d){
   var act=d.op_mode===1;
   var btn=document.getElementById('btnMode');
   if(btn){
-    btn.textContent=act?'停用':'启用';
+    btn.textContent=act?'暂停模拟计算':'启用模拟计算';
     btn.className='btn-main '+(act?'btn-stop':'btn-act');
   }
 
@@ -1135,7 +1118,7 @@ function upd(d){
   var dsRow=document.getElementById('rowDriveStyle');
   if(dsRow) dsRow.style.display='flex';
 
-  var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.speed_limit_seen?Number(d.speed_limit_kph||0).toFixed(0):'--';
+  var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
   var st=document.getElementById('spdOffTarget'); if(st)st.textContent=(d.hw3_offset_target!==undefined)?d.hw3_offset_target:'--';
   var sn=document.getElementById('spdOffNow'); if(sn)sn.textContent=(d.speed_offset!==undefined)?d.speed_offset:'--';
   var d399=document.getElementById('diag399Limit'); if(d399)d399.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
@@ -1144,16 +1127,11 @@ function upd(d){
   var d3o=document.getElementById('diag3fdOffset'); if(d3o)d3o.textContent=d.ap3fd_diag_seen?String(d.ap3fd_offset_raw):'--';
   var d3p=document.getElementById('diag3fdProfile'); if(d3p)d3p.textContent=d.ap3fd_diag_seen?String(d.ap3fd_profile_raw):'--';
   var d38=document.getElementById('diag3f8Follow'); if(d38)d38.textContent=(d.follow_distance_raw!==undefined)?String(d.follow_distance_raw):'--';
-  var a3=document.getElementById('swH3Auto'); if(a3)a3.checked=!!d.hw3_auto_speed;
-  var c3=document.getElementById('swH3Cust'); if(c3)c3.checked=!!d.hw3_custom_speed;
-  var sws=document.getElementById('swH3Slew'); if(sws)sws.checked=!!d.hw3_offset_slew;
-  var swh=document.getElementById('swH3High'); if(swh)swh.checked=!!d.hw3_high_speed_enable;
-  speedSetVal('h3SlewRate',d.hw3_slew_rate||5); speedSetVal('h4off',d.hw4_offset||0);
-  if(Array.isArray(d.hw3_custom_target))for(var si=0;si<5;si++)speedSetVal('h3ct'+si,d.hw3_custom_target[si]);
-  if(Array.isArray(d.hw3_high_speed_pct))for(var sj=0;sj<5;sj++)speedSetVal('h3hs'+sj,d.hw3_high_speed_pct[sj]);
-  var h3p=document.getElementById('speedHw3Panel'),h4p=document.getElementById('speedHw4Panel');
-  if(h3p)h3p.style.display=protoV14?'none':'block';
-  if(h4p)h4p.style.display=protoV14?'block':'none';
+  speedSetVal('offsetMode',d.hw3_offset_mode);
+  speedSetVal('manualOffset',d.hw3_manual_offset);
+  if(Array.isArray(d.hw3_custom_pct))for(var i=0;i<4;i++)speedSetVal('cp'+i,d.hw3_custom_pct[i]);
+  var rv=document.getElementById('researchValues');
+  if(rv)rv.textContent='目标 '+Number(d.research_target_kph||0).toFixed(2)+' / 平滑 '+Number(d.research_smooth_kph||0).toFixed(2)+' / cap '+Number(d.research_cap_kph||0).toFixed(0)+' km/h；模拟帧 can0='+d.mock_can0+'，can1='+d.mock_can1+'；物理 TX=0';
 
   var ct=document.getElementById('chipTemp'),ctm=document.getElementById('chipTempMax');
   if(ct)ct.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1)+' °C':'--';
@@ -1188,18 +1166,18 @@ function upd(d){
   var apmv3Sel=document.getElementById('selApmv3');
   if(apmv3Sel && d.apmv3_branch!==undefined && document.activeElement!==apmv3Sel) apmv3Sel.value=String(d.apmv3_branch);
   if(document.getElementById('swTrkMode')) document.getElementById('swTrkMode').checked=d.track_mode_inject;
-  if(document.getElementById('trkRot')&&document.activeElement.id!=='trkRot'&&d.track_rotation_pct!==undefined){document.getElementById('trkRot').value=d.track_rotation_pct;var _tr=document.getElementById('trkRotV');if(_tr)_tr.textContent=d.track_rotation_pct;}
-  if(document.getElementById('trkStab')&&document.activeElement.id!=='trkStab'&&d.track_stability_pct!==undefined){document.getElementById('trkStab').value=d.track_stability_pct;var _ts=document.getElementById('trkStabV');if(_ts)_ts.textContent=d.track_stability_pct;}
+  if(document.getElementById('trkRot')&&(document.activeElement||{}).id!=='trkRot'&&d.track_rotation_pct!==undefined){document.getElementById('trkRot').value=d.track_rotation_pct;var _tr=document.getElementById('trkRotV');if(_tr)_tr.textContent=d.track_rotation_pct;}
+  if(document.getElementById('trkStab')&&(document.activeElement||{}).id!=='trkStab'&&d.track_stability_pct!==undefined){document.getElementById('trkStab').value=d.track_stability_pct;var _ts=document.getElementById('trkStabV');if(_ts)_ts.textContent=d.track_stability_pct;}
   if(document.getElementById('swTrkPC')) document.getElementById('swTrkPC').checked=d.track_post_cooling;
   if(document.getElementById('swTrkCO')) document.getElementById('swTrkCO').checked=d.track_cmp_overclock;
   if(document.getElementById('swDisp')) document.getElementById('swDisp').checked=!!d.display_enabled;
-  if(document.activeElement.id!=='dispBr' && document.getElementById('dispBr'))
+  if((document.activeElement||{}).id!=='dispBr' && document.getElementById('dispBr'))
     document.getElementById('dispBr').value=d.display_brightness||50;
-  if(document.activeElement.id!=='dispTo' && document.getElementById('dispTo'))
+  if((document.activeElement||{}).id!=='dispTo' && document.getElementById('dispTo'))
     document.getElementById('dispTo').value=d.display_timeout_s||60;
   if(document.getElementById('swDump')) document.getElementById('swDump').checked=!!d.can_dump;
 
-  if(document.activeElement.id!=='numSleep' && document.getElementById('numSleep'))
+  if((document.activeElement||{}).id!=='numSleep' && document.getElementById('numSleep'))
     document.getElementById('numSleep').value=Math.floor((d.sleep_ms||0)/1000);
 
   updateControlsSummary(d);
@@ -1413,17 +1391,10 @@ function saveWifi(){
 function speedNum(cmdName,el,minv,maxv){
   var v=parseInt(el.value,10); if(isNaN(v))v=minv; v=Math.max(minv,Math.min(maxv,v)); el.value=v; cmd(cmdName,v);
 }
-function speedMutex(which,on){
-  if(which==='auto'){
-    if(on){var c=document.getElementById('swH3Cust');if(c)c.checked=false;cmd('hw3_custom_speed',false);}
-    cmd('hw3_auto_speed',on);
-  }else{
-    if(on){var a=document.getElementById('swH3Auto');if(a)a.checked=false;cmd('hw3_auto_speed',false);}
-    cmd('hw3_custom_speed',on);
-  }
+function speedSetVal(id,value){
+  var el=document.getElementById(id);
+  if(el && document.activeElement!==el && value!==undefined)el.value=String(value);
 }
-function speedSetVal(id,v){var e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;}
-
 function cmd(c,v){
   if(ws&&ws.readyState===1) {
     ws.send(JSON.stringify({cmd:c,value:v}));
@@ -1498,24 +1469,6 @@ function setHttpLogUi(running){
   var filterEl=document.getElementById('httpLogFilter');
   if(filterEl)filterEl.disabled=running;
   pill('httpLogSt',running||httpLogReady,running?'Collecting':(httpLogReady?'Ready':'Idle'));
-}
-
-function syncMarkTapUi(){
-  var b=document.getElementById('btnMarkTap');
-  if(b)b.disabled=!httpLogRunning;
-}
-function markHttpTap(){
-  if(!httpLogRunning)return;
-  var ms=Math.max(0,Date.now()-httpLogStarted);
-  httpLogTapCount++;
-  var sec=(ms/1000).toFixed(3);
-  var line='# MARK TAP '+httpLogTapCount+' browser_elapsed='+sec+'s\r\n';
-  var bytes=new TextEncoder().encode(line);
-  httpLogParts.push(bytes);
-  httpLogBytes+=bytes.length;
-  var info=document.getElementById('httpTapInfo');
-  if(info)info.textContent='MARK TAP '+httpLogTapCount+' recorded at ~'+sec+' s.';
-  logInfo('MARK TAP '+httpLogTapCount+' at ~'+sec+'s; continue driving/recording.','var(--yellow)');
 }
 
 function formatBytes(n){
@@ -1599,7 +1552,6 @@ function stopHttpLog(reason){
   if(httpLogAbort)httpLogAbort.abort();
   httpLogReader=null;
   httpLogAbort=null;
-  syncMarkTapUi();
   prepareHttpLogFile();
   if(reason){
     if(httpLogReady){
@@ -1623,15 +1575,11 @@ function startHttpLog(){
   }
   httpLogParts=[];
   httpLogBytes=0;
-  httpLogTapCount=0;
   clearHttpLogBlob();
   httpLogStarted=Date.now();
   httpLogRunning=true;
   httpLogAbort=new AbortController();
   setHttpLogUi(true);
-  syncMarkTapUi();
-  var tapInfo=document.getElementById('httpTapInfo');
-  if(tapInfo)tapInfo.textContent='Logging active. Tap MARK TAP immediately after touching the Tesla speed/limit area.';
   logInfo('Connecting to HTTP stream...');
 
   var streamUrl='http://'+location.hostname+':82/stream';
@@ -1665,7 +1613,6 @@ function startHttpLog(){
       httpLogRunning=false;
       httpLogReader=null;
       httpLogAbort=null;
-      syncMarkTapUi();
       setHttpLogUi(false);
       logInfo('Stream stopped: '+(err&&err.message?err.message:'connection closed'),'var(--yellow)');
       if(httpLogBytes>0)prepareHttpLogFile();
@@ -1801,8 +1748,8 @@ static String build_json() {
     j += "\"hw_version\":";    j += (int)state.hw_version;             j += ',';
     j += "\"fsd_protocol_mode\":"; j += (int)state.fsd_protocol_mode;   j += ',';
     j += "\"hw3_drive_style\":"; j += (int)state.hw3_drive_style;       j += ',';
-    j += "\"speed_profile_locked\":"; j += state.speed_profile_locked ? "true" : "false"; j += ',';
-    j += "\"speed_profile\":"; j += state.speed_profile; j += ',';
+    j += "\"speed_profile_locked\":"; j += state.hw3_drive_style != 0 ? "true" : "false"; j += ',';
+    j += "\"speed_profile\":"; j += state.research_profile; j += ',';
     j += "\"speed_offset\":"; j += state.speed_offset; j += ',';
     j += "\"speed_limit_seen\":"; j += state.speed_limit_seen ? "true" : "false"; j += ',';
     j += "\"speed_limit_kph\":"; j += String(state.speed_limit_kph, 1); j += ',';
@@ -1814,6 +1761,14 @@ static String build_json() {
     j += "\"ap3fd_offset_raw\":"; j += (int)state.ap3fd_offset_raw; j += ',';
     j += "\"ap3fd_profile_raw\":"; j += (int)state.ap3fd_profile_raw; j += ',';
     j += "\"follow_distance_raw\":"; j += (int)state.follow_distance_raw; j += ',';
+    j += "\"physical_can_tx\":false,";
+    j += "\"mock_can0\":"; j += state.research_mock_count[0]; j += ',';
+    j += "\"mock_can1\":"; j += state.research_mock_count[1]; j += ',';
+    j += "\"research_target_kph\":"; j += state.research_target_kph; j += ',';
+    j += "\"research_smooth_kph\":"; j += state.hw3_smooth_target_kph; j += ',';
+    j += "\"research_cap_kph\":"; j += state.research_cap_kph; j += ',';
+    j += "\"research_protocol_detected\":"; j += state.research_protocol_detected; j += ',';
+    j += "\"research_profile\":"; j += state.research_profile; j += ',';
     j += "\"hw3_offset_mode\":"; j += (int)state.hw3_offset_mode; j += ',';
     j += "\"hw3_manual_offset\":"; j += (int)state.hw3_manual_offset; j += ',';
     j += "\"hw3_custom_pct\":[";
@@ -2024,7 +1979,7 @@ static void ws_event(uint8_t num, WStype_t type,
             while (*vptr == ' ' || *vptr == ':') vptr++;
             int sel = atoi(vptr);
             if (sel < 0) sel = 0;
-            if (sel > 3) sel = 3;
+            if (sel > 5) sel = 5;
             FSDState saved;
             state_enter();
             g_state->hw3_drive_style = (uint8_t)sel;
@@ -2046,14 +2001,7 @@ static void ws_event(uint8_t num, WStype_t type,
         }
     } else if (strstr(buf, "\"hw3_offset_mode\"") || strstr(buf, "\"hw3_manual_offset\"") ||
                strstr(buf, "\"hw3_cp0\"") || strstr(buf, "\"hw3_cp1\"") ||
-               strstr(buf, "\"hw3_cp2\"") || strstr(buf, "\"hw3_cp3\"") ||
-               strstr(buf, "\"hw3_auto_speed\"") || strstr(buf, "\"hw3_custom_speed\"") ||
-               strstr(buf, "\"hw3_offset_slew\"") || strstr(buf, "\"hw3_slew_rate\"") ||
-               strstr(buf, "\"hw3_high_speed_enable\"") || strstr(buf, "\"hw4_offset\"") ||
-               strstr(buf, "\"hw3_ct0\"") || strstr(buf, "\"hw3_ct1\"") || strstr(buf, "\"hw3_ct2\"") ||
-               strstr(buf, "\"hw3_ct3\"") || strstr(buf, "\"hw3_ct4\"") ||
-               strstr(buf, "\"hw3_hs0\"") || strstr(buf, "\"hw3_hs1\"") || strstr(buf, "\"hw3_hs2\"") ||
-               strstr(buf, "\"hw3_hs3\"") || strstr(buf, "\"hw3_hs4\"")) {
+               strstr(buf, "\"hw3_cp2\"") || strstr(buf, "\"hw3_cp3\"")) {
         if (vptr) {
             while (*vptr == ' ' || *vptr == ':') vptr++;
             bool bv = (strncmp(vptr, "true", 4) == 0);
@@ -2066,21 +2014,6 @@ static void ws_event(uint8_t num, WStype_t type,
             else if (strstr(buf, "\"hw3_cp1\"")) g_state->hw3_custom_pct[1]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
             else if (strstr(buf, "\"hw3_cp2\"")) g_state->hw3_custom_pct[2]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
             else if (strstr(buf, "\"hw3_cp3\"")) g_state->hw3_custom_pct[3]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
-            else if (strstr(buf, "\"hw3_auto_speed\"")) { g_state->hw3_auto_speed=bv; if(bv)g_state->hw3_custom_speed=false; }
-            else if (strstr(buf, "\"hw3_custom_speed\"")) { g_state->hw3_custom_speed=bv; if(bv)g_state->hw3_auto_speed=false; }
-            else if (strstr(buf, "\"hw3_offset_slew\"")) g_state->hw3_offset_slew=bv;
-            else if (strstr(buf, "\"hw3_slew_rate\"")) g_state->hw3_slew_rate=(uint8_t)((iv<1)?1:(iv>25?25:iv));
-            else if (strstr(buf, "\"hw3_high_speed_enable\"")) g_state->hw3_high_speed_enable=bv;
-            else if (strstr(buf, "\"hw4_offset\"")) g_state->hw4_offset=(uint8_t)((iv<0)?0:(iv>21?21:iv));
-            else {
-                const int cmin[5]={30,40,50,60,70}, cmax[5]={45,60,75,90,105};
-                for(int i=0;i<5;i++){
-                    char key[20]; snprintf(key,sizeof(key),"\"hw3_ct%d\"",i);
-                    if(strstr(buf,key)){ int x=iv; if(x<cmin[i])x=cmin[i]; if(x>cmax[i])x=cmax[i]; g_state->hw3_custom_target[i]=(uint8_t)x; }
-                    snprintf(key,sizeof(key),"\"hw3_hs%d\"",i);
-                    if(strstr(buf,key)){ int x=iv; if(x<0)x=0; if(x>50)x=50; g_state->hw3_high_speed_pct[i]=(uint8_t)x; }
-                }
-            }
             saved=*g_state;
             state_exit();
             prefs_save(&saved);

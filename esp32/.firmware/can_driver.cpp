@@ -42,11 +42,11 @@ class TwaiDriver : public CanDriver {
         twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
             (gpio_num_t)tx_pin_,
             (gpio_num_t)rx_pin_,
-            listen_only ? TWAI_MODE_LISTEN_ONLY : TWAI_MODE_NORMAL);
+            TWAI_MODE_LISTEN_ONLY);
         // Queue depths: 64 RX (busy Vehicle CAN can deliver thousands of
         // frames/s; a deeper queue cuts controller-level drops), 5 TX.
         g.rx_queue_len = 64;
-        g.tx_queue_len = 5;
+        g.tx_queue_len = 0;
 
         twai_timing_config_t t = TWAI_TIMING_CONFIG_500KBITS();
         twai_filter_config_t f;
@@ -85,6 +85,7 @@ public:
         : label_(label), tx_pin_(tx_pin), rx_pin_(rx_pin) {}
 
     bool begin(bool listen_only) override {
+        listen_only = true;
         bool ok = install_and_start(listen_only);
         Serial.printf("[CAN] %s TWAI %s @ 500 kbps (TX=%d RX=%d)\n",
                       label_, ok ? (listen_only ? "Listen-Only" : "Normal") : "FAILED",
@@ -93,22 +94,15 @@ public:
     }
 
     bool send(const CanFrame &frame) override {
-        if (listen_only_) return false;
-        twai_message_t msg;
-        memset(&msg, 0, sizeof(msg));
-        msg.identifier       = frame.id;
-        msg.data_length_code = frame.dlc;
-        memcpy(msg.data, frame.data, frame.dlc);
-        // 5 ms TX timeout — short enough to not stall the main loop
-        if (twai_transmit(&msg, pdMS_TO_TICKS(5)) != ESP_OK) return false;
-        tx_count_++;
-        return true;
+        (void)frame;
+        return false; // No physical TX implementation is compiled into this branch.
     }
 
     bool receive(CanFrame &frame) override {
         twai_message_t msg;
         // Non-blocking receive (timeout = 0)
         if (twai_receive(&msg, 0) != ESP_OK) return false;
+        if (msg.extd || msg.rtr || msg.data_length_code > 8) return false;
         frame.id  = msg.identifier;
         frame.dlc = msg.data_length_code;
         memcpy(frame.data, msg.data, frame.dlc);
@@ -178,6 +172,7 @@ public:
     }
 
     void setListenOnly(bool enable) override {
+        enable = true;
 #ifdef SNIFFER_ONLY
         (void)enable;   // sniffer build is permanently Listen-Only; ignore mode switches
         return;
@@ -278,6 +273,7 @@ public:
 #endif
 
     bool begin(bool listen_only) override {
+        listen_only = true;
         if (rst_pin_ >= 0) {
             pinMode((uint8_t)rst_pin_, OUTPUT);
             digitalWrite((uint8_t)rst_pin_, LOW);
@@ -328,7 +324,7 @@ public:
         // after a successful setBitrate it is still a chip / SPI issue.
         MCP2515::ERROR err = listen_only
             ? mcp_.setListenOnlyMode()
-            : mcp_.setNormalMode();
+            : mcp_.setListenOnlyMode();
         listen_only_ = listen_only;
         installed_ = (err == MCP2515::ERROR_OK);
         if (installed_) {
@@ -346,24 +342,16 @@ public:
     bool hardwarePresent() override { return chip_detected_; }
 
     bool send(const CanFrame &frame) override {
-        if (!installed_ || listen_only_) return false;
-        struct can_frame f;
-        f.can_id  = frame.id;
-        f.can_dlc = frame.dlc;
-        memcpy(f.data, frame.data, frame.dlc);
-        if (mcp_.sendMessage(&f) != MCP2515::ERROR_OK) {
-            err_count_++;
-            return false;
-        }
-        tx_count_++;
-        return true;
+        (void)frame;
+        return false; // No physical TX implementation is compiled into this branch.
     }
 
     bool receive(CanFrame &frame) override {
         if (!installed_) return false;
         struct can_frame f;
         if (mcp_.readMessage(&f) != MCP2515::ERROR_OK) return false;
-        frame.id  = f.can_id & CAN_EFF_MASK;
+        if ((f.can_id & (CAN_EFF_FLAG | CAN_RTR_FLAG)) || f.can_dlc > 8) return false;
+        frame.id  = f.can_id & CAN_SFF_MASK;
         frame.dlc = f.can_dlc;
         memcpy(frame.data, f.data, f.can_dlc);
         rx_count_++;
@@ -387,8 +375,9 @@ public:
     uint32_t txFailedCount() override { return err_count_; }
 
     void setListenOnly(bool enable) override {
+        enable = true;
         if (!installed_ || listen_only_ == enable) return;
-        MCP2515::ERROR err = enable ? mcp_.setListenOnlyMode() : mcp_.setNormalMode();
+        MCP2515::ERROR err = enable ? mcp_.setListenOnlyMode() : mcp_.setListenOnlyMode();
         if (err == MCP2515::ERROR_OK) {
             listen_only_ = enable;
         } else {
@@ -414,7 +403,7 @@ public:
             ok &= (mcp_.setFilter(rxf[i], false, fid) == MCP2515::ERROR_OK);
         }
         // setFilter* leave the chip in CONFIG mode; restore the prior run mode.
-        MCP2515::ERROR merr = listen_only_ ? mcp_.setListenOnlyMode() : mcp_.setNormalMode();
+        MCP2515::ERROR merr = listen_only_ ? mcp_.setListenOnlyMode() : mcp_.setListenOnlyMode();
         ok &= (merr == MCP2515::ERROR_OK);
         if (!ok) {
             Serial.printf("[CAN] %s MCP2515 filter switch FAILED\n", label_);
@@ -438,8 +427,23 @@ public:
 };
 #endif
 
+#if defined(CAN_DRIVER_MOCK)
+class MockDriver : public CanDriver {
+public:
+    bool begin(bool) override { return true; }
+    bool send(const CanFrame&) override { return false; }
+    bool receive(CanFrame&) override { return false; }
+    uint32_t errorCount() override { return 0; }
+    uint32_t txCount() override { return 0; }
+    uint32_t rxCount() override { return 0; }
+    void setListenOnly(bool) override {}
+};
+#endif
+
 CanDriver *can_driver_create() {
-#if defined(CAN_DRIVER_TWAI)
+#if defined(CAN_DRIVER_MOCK)
+    return new MockDriver();
+#elif defined(CAN_DRIVER_TWAI)
     return new TwaiDriver("can0", PIN_CAN_TX, PIN_CAN_RX);
 #elif defined(CAN_DRIVER_MCP2515)
     return new Mcp2515Driver("can0", PIN_MCP_CS, PIN_MCP_SCK, PIN_MCP_MISO,
@@ -482,6 +486,6 @@ void can_shutdown_all(CanDriver **buses, uint8_t count) {
     Serial.println("[CAN] Controllers stopped — bus released");
 }
 
-#if !defined(CAN_DRIVER_TWAI) && !defined(CAN_DRIVER_MCP2515) && !defined(CAN_DRIVER_T2CAN_DUAL)
+#if !defined(CAN_DRIVER_MOCK) && !defined(CAN_DRIVER_TWAI) && !defined(CAN_DRIVER_MCP2515) && !defined(CAN_DRIVER_T2CAN_DUAL)
 #error "Define CAN_DRIVER_TWAI, CAN_DRIVER_MCP2515, or CAN_DRIVER_T2CAN_DUAL in platformio.ini build_flags"
 #endif

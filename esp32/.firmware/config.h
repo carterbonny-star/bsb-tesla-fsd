@@ -1,4 +1,5 @@
 #pragma once
+#include "research_policy.h"
 
 // ── CAN IDs ───────────────────────────────────────────────────────────────────
 #define CAN_ID_STW_ACTN_RQ    0x045u  // 69   - STW_ACTN_RQ:  steering stalk (Legacy follow distance)

@@ -1,5 +1,7 @@
 # Tesla FSD Unlock for ESP32 (OBD-II Plug & Play)
 
+> **Research branch:** every ESP32 build has physical CAN TX compiled out. Active mode only computes mock output. See [research/bench documentation](../docs/research-bench.md) for source semantics, replay and build verification. Historical vehicle-control instructions below do not apply to these research binaries.
+
 > ESP32 port of [hypery11/flipper-tesla-fsd](https://github.com/hypery11/flipper-tesla-fsd) — same CAN logic, different hardware, with a built-in WiFi dashboard.
 
 Unlock Tesla FSD with an ESP32 + CAN transceiver via OBD-II. No Flipper Zero needed — ~¥100 total cost.

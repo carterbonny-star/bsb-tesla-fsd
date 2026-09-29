@@ -32,6 +32,8 @@
 #include "profile_match.h"
 #include "../../fsd_logic/fsd_events.h"
 #include "prefs.h"
+#include "../../fsd_logic/research_speed.h"
+#include "../../fsd_logic/research_replay.h"
 #if defined(BOARD_TTGO_DISPLAY)
 #include "display.h"
 #endif
@@ -40,7 +42,7 @@
 #endif
 
 // ── Globals ───────────────────────────────────────────────────────────────────
-#if defined(CAN_DRIVER_T2CAN_DUAL)
+#if defined(CAN_DRIVER_T2CAN_DUAL) || defined(RESEARCH_DUAL)
 #define CAN_ACTIVE_BUS_COUNT 2u
 #else
 #define CAN_ACTIVE_BUS_COUNT 1u
@@ -112,31 +114,60 @@ static bool serial_cmd_equals(const char *cmd, const char *expected) {
     return *cmd == '\0' && *expected == '\0';
 }
 
+static void process_frame(CanBusId bus, const CanFrame &frame, uint32_t now);
 static void serial_command_tick() {
-    static char buf[24];
+    static char buf[96];
+    static bool overflow = false;
     static uint8_t len = 0;
+    static bool replay_seen = false;
+    static uint32_t replay_last_ms = 0;
 
     while (Serial.available() > 0) {
         char c = (char)Serial.read();
         if (c == '\r' || c == '\n') {
+            if (overflow) { overflow=false; len=0; continue; }
             if (len == 0) continue;
             buf[len] = '\0';
             len = 0;
 
-            if (serial_cmd_equals(buf, "ip") || serial_cmd_equals(buf, "wifi")) {
+            ReplayInput input = {};
+            if (research_parse_replay(buf, &input)) {
+                if(replay_seen && (int32_t)(input.ms-replay_last_ms)<0) {
+                    Serial.println("[REPLAY] backwards timestamp rejected; use reset");
+                    continue;
+                }
+                replay_seen=true;
+                replay_last_ms=input.ms;
+                process_frame(bus_id_from_index(input.bus), input.frame, input.ms);
+                Serial.println("[REPLAY] accepted (mock output only)");
+            } else if (serial_cmd_equals(buf, "reset")) {
+                state_enter();
+                research_speed_reset(&g_state);
+                g_state.research_heartbeat_seen=false;
+                g_state.research_gear='?';
+                g_state.private399_limit_seen=false;
+                g_state.research_protocol_detected=14;
+                g_state.research_protocol_locked=false;
+                g_state.research_3fd_count=0;
+                g_state.research_profile=2;
+                state_exit();
+                replay_seen=false;
+                Serial.println("[REPLAY] state reset");
+            } else if (serial_cmd_equals(buf, "ip") || serial_cmd_equals(buf, "wifi")) {
                 wifi_print_status();
             } else if (serial_cmd_equals(buf, "help") || serial_cmd_equals(buf, "?")) {
-                Serial.println("[SER] Commands: ip");
+                Serial.println("[SER] ip | reset | replay <ms> can0|can1 <HEX-ID>#<HEX-DATA>");
             } else {
                 Serial.println("[SER] Unknown command. Type: ip");
             }
             continue;
         }
 
-        if (c < 32 || c > 126) continue;
+        if (overflow || c < 32 || c > 126) continue;
         if (len < sizeof(buf) - 1) {
             buf[len++] = c;
         } else {
+            overflow = true;
             len = 0;
             Serial.println("[SER] Command too long");
         }
@@ -179,15 +210,18 @@ static CanDriver *can_for_bus(CanBusId bus) {
 }
 
 static bool send_on_bus(CanBusId bus, const CanFrame &frame) {
-    CanDriver *driver = can_for_bus(bus);
-    bool ok = driver ? driver->send(frame) : false;
-    // Single TX chokepoint: every injected/modified frame (0x3EE, 0x3FD, the
-    // 0x370 nag echo, generated + modified wrappers) routes through here. Record
-    // the ones we actually put on the bus as TX so the black-box capture shows
-    // our frames alongside the RX bus — same id filter as RX, cheap ring write,
-    // no-op when the recorder is off. Recording never gates the send.
-    if (ok) blackbox_record_tx(bus, frame, millis());
-    return ok;
+    if (frame.dlc > 8 || frame.id > 0x7FF) return false;
+    state_enter();
+    ++g_state.research_mock_count[bus_index(bus)];
+    g_state.research_last_mock_id=frame.id;
+    g_state.research_last_mock_bus=bus_index(bus);
+    g_state.research_last_mock_dlc=frame.dlc;
+    memcpy(g_state.research_last_mock_data, frame.data, frame.dlc);
+    state_exit();
+    Serial.printf("[MOCK] %s %03lX#", can_bus_name(bus), (unsigned long)frame.id);
+    for (unsigned i=0; i<frame.dlc; ++i) Serial.printf("%02X",frame.data[i]);
+    Serial.println();
+    return true; // accepted by the mock sink, NEVER a physical TX success
 }
 
 static bool send_generated_frame(CanBusId bus, const CanFrame &frame) {
@@ -1062,8 +1096,11 @@ static void update_led() {
 }
 
 // ── CAN frame dispatcher ──────────────────────────────────────────────────────
-static void process_frame(CanBusId bus, const CanFrame &frame) {
-    uint32_t now = millis();
+static void process_frame(CanBusId bus, const CanFrame &frame, uint32_t now) {
+    if (frame.dlc > 8 || frame.id > 0x7FF) return;
+    state_enter();
+    research_observe(&g_state, bus_index(bus), &frame, now);
+    state_exit();
     state_enter();
     g_state.rx_count++;
     // Configurable signal mapping (#122): when set, read DAS/steering from the
@@ -1175,36 +1212,18 @@ static void process_frame(CanBusId bus, const CanFrame &frame) {
     if (frame.id == CAN_ID_BMS_SOC)     { state_enter(); fsd_handle_bms_soc(&g_state, &frame);     state_exit(); return; }
     if (frame.id == CAN_ID_BMS_THERMAL) { state_enter(); fsd_handle_bms_thermal(&g_state, &frame); state_exit(); return; }
 
-    // ── BSB CN speed-offset validation (read-only, always) ───────────────────
-    // Private-group reference implementation uses 0x399 byte1 * 5 as a posted
-    // speed-limit candidate and 0x3FD mux2 byte1[5:0] / byte7[6:4] as the
-    // candidate offset/profile fields. Observe only; do not modify or gate TX.
-    if (frame.id == CAN_ID_DAS_STATUS_HW3 && frame.dlc >= 2) {
-        uint8_t raw = frame.data[1];
-        uint8_t kph = (uint8_t)(raw * 5u);
-        bool valid =
-            kph == 15u || kph == 20u || kph == 25u || kph == 30u ||
-            kph == 35u || kph == 40u || kph == 45u || kph == 50u ||
-            kph == 55u || kph == 60u || kph == 70u || kph == 80u ||
-            kph == 90u || kph == 100u || kph == 110u || kph == 120u;
-        if (valid) {
-            state_enter();
-            g_state.private399_limit_seen = true;
-            g_state.private399_raw_limit = raw;
-            g_state.private399_limit_kph = (float)kph;
-            g_state.private399_last_ms = now;
-            state_exit();
-        }
-    }
     if (frame.id == CAN_ID_AP_CONTROL && frame.dlc >= 8) {
         uint8_t mux = frame.data[0] & 0x07u;
         state_enter();
         g_state.ap3fd_diag_seen = true;
         g_state.ap3fd_mux = mux;
         g_state.ap3fd_last_ms = now;
-        if (mux == 2u) {
+        if (!research_v13(&g_state) && mux == 2u) {
             g_state.ap3fd_offset_raw = frame.data[1] & 0x3Fu;
             g_state.ap3fd_profile_raw = (frame.data[7] >> 4) & 0x07u;
+        } else if(research_v13(&g_state) && mux == 0u) {
+            g_state.ap3fd_offset_raw=frame.data[4]&0x3F;
+            g_state.ap3fd_profile_raw=(frame.data[6]>>1)&3;
         }
         state_exit();
     }
@@ -1456,7 +1475,8 @@ static void process_frame(CanBusId bus, const CanFrame &frame) {
         CanFrame f = frame;
         state_enter();
         fsd_handle_follow_distance(&g_state, &frame);
-        bool modified = fsd_handle_driver_assist_override(&g_state, &f);
+        bool modified = research_calculate(&g_state, bus_index(bus), &f) != 0;
+        modified = fsd_handle_driver_assist_override(&g_state, &f) || modified;
         state_exit();
         if (modified && tx) send_on_bus(bus, f);
         return;
@@ -1491,10 +1511,11 @@ static void process_frame(CanBusId bus, const CanFrame &frame) {
         // this engagement, keeping injection off the abort edge. Resets on disengage.
         bool minimal_ok = !(g_state.ap_first_minimal &&
                             g_state.ap_inject_count >= AP_MINIMAL_INJECT_FRAMES);
-        bool modified = minimal_ok && fsd_handle_autopilot_frame(&g_state, &f);
+        unsigned mock_emissions = minimal_ok ? research_calculate(&g_state, bus_index(bus), &f) : 0;
+        bool modified = mock_emissions != 0;
         if (modified && ap_ok && g_state.ap_first_minimal) g_state.ap_inject_count++;
         state_exit();
-        if (modified && tx && ap_ok) send_on_bus(bus, f);
+        if (modified && tx && ap_ok) for (unsigned n=0; n<mock_emissions; ++n) send_on_bus(bus, f);
         return;
     }
 }
@@ -1750,7 +1771,7 @@ void loop() {
         CanBusId bus = bus_id_from_index(i);
         CanFrame frame;
         while (g_can[i]->receive(frame)) {
-            process_frame(bus, frame);
+            process_frame(bus, frame, millis());
         }
         // Recover a bus-off controller so RX resumes without a manual toggle (#108).
         g_can[i]->serviceHealth();

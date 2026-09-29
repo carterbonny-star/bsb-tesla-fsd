@@ -21,9 +21,18 @@ test_fsd_core: $(SRC) $(ROOT)/fsd_logic/fsd_handler.h $(ROOT)/fsd_logic/fsd_type
 test_esp32_core: $(ESP32_SRC) $(ESP32)/fsd_handler.h $(ESP32)/config.h $(ESP32)/can_signals.h $(ROOT)/fsd_logic/fsd_types.h $(ROOT)/fsd_logic/fsd_state.h $(ROOT)/fsd_logic/fsd_checksum.h $(ROOT)/fsd_logic/fsd_can_ops.h $(ROOT)/fsd_logic/fsd_ota.h $(ROOT)/fsd_logic/fsd_autopark.h
 	$(CXX) $(CXXFLAGS) -I$(ESP32) -I$(ROOT)/fsd_logic $(ESP32_SRC) -o $@
 
-check: test_fsd_core test_esp32_core
+test_research: test_research.cpp $(ROOT)/fsd_logic/research_speed.h $(ROOT)/fsd_logic/research_replay.h $(ROOT)/fsd_logic/fsd_state.h
+	$(CXX) $(CXXFLAGS) test_research.cpp -o $@
+
+research_replay: $(ROOT)/tools/research_replay.cpp $(ROOT)/fsd_logic/research_speed.h $(ROOT)/fsd_logic/research_replay.h
+	$(CXX) $(CXXFLAGS) $(ROOT)/tools/research_replay.cpp -o $@
+
+check: test_fsd_core test_esp32_core test_research research_replay
 	./test_fsd_core
 	./test_esp32_core
+	./test_research
+	./research_replay 14 < ../examples/research.replay
+	./research_replay 13 < ../examples/research.replay
 
 clean:
 	rm -rf test_fsd_core test_fsd_core.dSYM test_esp32_core test_esp32_core.dSYM

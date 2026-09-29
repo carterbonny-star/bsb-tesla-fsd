@@ -66,7 +66,7 @@ void prefs_load(FSDState *state) {
 
     // BSB CN HW3 driving style: 0=Auto, 1=Chill, 2=Normal, 3=Hurry.
     state->hw3_drive_style = g_prefs.getUChar("h3style", 0);
-    if (state->hw3_drive_style > 3) state->hw3_drive_style = 0;
+    if (state->hw3_drive_style > 5) state->hw3_drive_style = 0;
 
     // Source-matched smart offset settings
     state->hw3_offset_mode = g_prefs.getUChar("off_mod", 1);
