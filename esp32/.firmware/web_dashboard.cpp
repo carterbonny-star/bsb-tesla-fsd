@@ -503,14 +503,16 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
         <span>目标偏移 <b id="spdOffTarget">--</b>%</span>
         <span>当前偏移 <b id="spdOffNow">--</b>%</span>
       </div>
-      <div style="font-size:.76em;color:var(--text2);padding:7px 8px;margin:0 0 8px;border:1px solid var(--line);border-radius:8px">
+      <div style="font-size:.76em;color:var(--text2);padding:7px 8px;margin:0 0 8px;border:1px solid var(--border);border-radius:8px">
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <span>DAS 目标 <b id="dasSetSpeed">--</b> km/h</span>
-          <span>Set Speed 事件 <b id="setSpeedEvent">等待</b></span>
-          <span>距上次 <b id="setSpeedAge">--</b> ms</span>
-          <span>次数 <b id="setSpeedCnt">0</b></span>
+          <span>399 候选限速 <b id="diag399Limit">--</b> km/h</span>
+          <span>399 Raw <b id="diag399Raw">--</b></span>
+          <span>3FD Mux <b id="diag3fdMux">--</b></span>
+          <span>Mux2 Offset <b id="diag3fdOffset">--</b>%</span>
+          <span>Mux2 Profile <b id="diag3fdProfile">--</b></span>
+          <span>3F8 Follow <b id="diag3f8Follow">--</b></span>
         </div>
-        <div class="hint" style="margin-top:4px">只读诊断：0x2B9 DAS_setSpeed 变化 ≥1 km/h 记为候选“点屏幕/设定速度”事件；不会改写 0x2B9。</div>
+        <div class="hint" style="margin-top:4px">最新只读验证：399 byte1×5 → 候选限速；3FD mux2 byte1[5:0] → 候选偏移，byte7[6:4] → 候选 Profile。不会改写这些帧。</div>
       </div>
       <div id="speedHw3Panel">
         <div class="row" style="padding:6px 0"><span class="lbl">V13 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
@@ -1137,10 +1139,12 @@ function upd(d){
   var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.speed_limit_seen?Number(d.speed_limit_kph||0).toFixed(0):'--';
   var st=document.getElementById('spdOffTarget'); if(st)st.textContent=(d.hw3_offset_target!==undefined)?d.hw3_offset_target:'--';
   var sn=document.getElementById('spdOffNow'); if(sn)sn.textContent=(d.speed_offset!==undefined)?d.speed_offset:'--';
-  var dsSp=document.getElementById('dasSetSpeed'); if(dsSp)dsSp.textContent=d.cruise_set_speed_seen?Number(d.cruise_set_speed_kph||0).toFixed(1):'--';
-  var se=document.getElementById('setSpeedEvent'); if(se)se.textContent=d.hw3_setspeed_event_recent?'刚触发':(d.hw3_setspeed_event_seen?'已记录':'等待');
-  var sa=document.getElementById('setSpeedAge'); if(sa)sa.textContent=d.hw3_setspeed_event_seen?String(d.hw3_setspeed_event_age_ms||0):'--';
-  var sc=document.getElementById('setSpeedCnt'); if(sc)sc.textContent=d.hw3_setspeed_trigger_count||0;
+  var d399=document.getElementById('diag399Limit'); if(d399)d399.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
+  var d399r=document.getElementById('diag399Raw'); if(d399r)d399r.textContent=d.private399_limit_seen?String(d.private399_raw_limit):'--';
+  var d3m=document.getElementById('diag3fdMux'); if(d3m)d3m.textContent=d.ap3fd_diag_seen?String(d.ap3fd_mux):'--';
+  var d3o=document.getElementById('diag3fdOffset'); if(d3o)d3o.textContent=d.ap3fd_diag_seen?String(d.ap3fd_offset_raw):'--';
+  var d3p=document.getElementById('diag3fdProfile'); if(d3p)d3p.textContent=d.ap3fd_diag_seen?String(d.ap3fd_profile_raw):'--';
+  var d38=document.getElementById('diag3f8Follow'); if(d38)d38.textContent=(d.follow_distance_raw!==undefined)?String(d.follow_distance_raw):'--';
   var a3=document.getElementById('swH3Auto'); if(a3)a3.checked=!!d.hw3_auto_speed;
   var c3=document.getElementById('swH3Cust'); if(c3)c3.checked=!!d.hw3_custom_speed;
   var sws=document.getElementById('swH3Slew'); if(sws)sws.checked=!!d.hw3_offset_slew;
@@ -1797,18 +1801,14 @@ static String build_json() {
     j += "\"speed_offset\":"; j += state.speed_offset; j += ',';
     j += "\"speed_limit_seen\":"; j += state.speed_limit_seen ? "true" : "false"; j += ',';
     j += "\"speed_limit_kph\":"; j += String(state.speed_limit_kph, 1); j += ',';
-    j += "\"cruise_set_speed_seen\":"; j += state.cruise_set_speed_seen ? "true" : "false"; j += ',';
-    j += "\"cruise_set_speed_kph\":"; j += String(state.cruise_set_speed_kph, 1); j += ',';
-    {
-        uint32_t now_ms = millis();
-        bool evt_seen = state.hw3_setspeed_trigger_count > 0u;
-        uint32_t evt_age = evt_seen ? (uint32_t)(now_ms - state.hw3_setspeed_trigger_ms) : 0u;
-        bool evt_recent = evt_seen && evt_age <= 1500u;
-        j += "\"hw3_setspeed_event_seen\":"; j += evt_seen ? "true" : "false"; j += ',';
-        j += "\"hw3_setspeed_event_recent\":"; j += evt_recent ? "true" : "false"; j += ',';
-        j += "\"hw3_setspeed_event_age_ms\":"; j += evt_age; j += ',';
-        j += "\"hw3_setspeed_trigger_count\":"; j += state.hw3_setspeed_trigger_count; j += ',';
-    }
+    j += "\"private399_limit_seen\":"; j += state.private399_limit_seen ? "true" : "false"; j += ',';
+    j += "\"private399_raw_limit\":"; j += (int)state.private399_raw_limit; j += ',';
+    j += "\"private399_limit_kph\":"; j += String(state.private399_limit_kph, 1); j += ',';
+    j += "\"ap3fd_diag_seen\":"; j += state.ap3fd_diag_seen ? "true" : "false"; j += ',';
+    j += "\"ap3fd_mux\":"; j += (int)state.ap3fd_mux; j += ',';
+    j += "\"ap3fd_offset_raw\":"; j += (int)state.ap3fd_offset_raw; j += ',';
+    j += "\"ap3fd_profile_raw\":"; j += (int)state.ap3fd_profile_raw; j += ',';
+    j += "\"follow_distance_raw\":"; j += (int)state.follow_distance_raw; j += ',';
     j += "\"hw3_auto_speed\":"; j += state.hw3_auto_speed ? "true" : "false"; j += ',';
     j += "\"hw3_custom_speed\":"; j += state.hw3_custom_speed ? "true" : "false"; j += ',';
     j += "\"hw3_custom_target\":[";
