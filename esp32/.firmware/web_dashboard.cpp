@@ -438,6 +438,17 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     <span id="httpLogFiltered" style="font-size:.8em;color:var(--text2)">0 frames</span>
   </div>
   <div id="httpLogInfo" class="log-info">Ready to collect 0x399 / 0x3FD / 0x3F8 in this browser.</div>
+  <div style="margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--card2)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:.82em">
+      <div><span class="lbl">399 候选限速</span><br><b id="diag399Limit" style="font-size:1.15em">--</b> km/h</div>
+      <div><span class="lbl">399 Raw</span><br><b id="diag399Raw" style="font-size:1.15em">--</b></div>
+      <div><span class="lbl">3FD Mux</span><br><b id="diag3fdMux" style="font-size:1.15em">--</b></div>
+      <div><span class="lbl">Mux2 Offset</span><br><b id="diag3fdOffset" style="font-size:1.15em">--</b>%</div>
+      <div><span class="lbl">Mux2 Profile</span><br><b id="diag3fdProfile" style="font-size:1.15em">--</b></div>
+      <div><span class="lbl">3F8 Follow</span><br><b id="diag3f8Follow" style="font-size:1.15em">--</b></div>
+    </div>
+    <div class="hint" style="margin-top:8px">测试版：关键速度偏移诊断常驻显示，方便边抓包边观察。</div>
+  </div>
   <button id="btnMarkTap" type="button" class="btn-main btn-yellow" onclick="markHttpTap()" disabled style="margin:10px 0 8px;font-size:1.08em">MARK TAP</button>
   <button id="btnHttpLog" type="button" class="btn-main btn-blue" onclick="toggleHttpLog()">STREAM LOG AND SAVE</button>
   <div id="httpTapInfo" class="log-info" style="margin-top:4px">Start logging, then press MARK TAP immediately after the event you want to align. The marker is written into the saved .dump as a #-comment.</div>
@@ -530,17 +541,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
         <span>目标偏移 <b id="spdOffTarget">--</b>%</span>
         <span>当前偏移 <b id="spdOffNow">--</b>%</span>
       </div>
-      <div style="font-size:.76em;color:var(--text2);padding:7px 8px;margin:0 0 8px;border:1px solid var(--border);border-radius:8px">
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <span>399 候选限速 <b id="diag399Limit">--</b> km/h</span>
-          <span>399 Raw <b id="diag399Raw">--</b></span>
-          <span>3FD Mux <b id="diag3fdMux">--</b></span>
-          <span>Mux2 Offset <b id="diag3fdOffset">--</b>%</span>
-          <span>Mux2 Profile <b id="diag3fdProfile">--</b></span>
-          <span>3F8 Follow <b id="diag3f8Follow">--</b></span>
-        </div>
-        <div class="hint" style="margin-top:4px">最新只读验证：399 byte1×5 → 候选限速；3FD mux2 byte1[5:0] → 候选偏移，byte7[6:4] → 候选 Profile。不会改写这些帧。</div>
-      </div>
+
       <div id="speedHw3Panel">
         <div class="row" style="padding:6px 0"><span class="lbl">V13 自动偏移<br><span class="hint">&lt;80：轻松 / 普通 / 迅驰 → 64 / 85 / 100 km/h；最高 +50%</span></span><label class="sw"><input type="checkbox" id="swH3Auto" onchange="speedMutex('auto',this.checked)"><span class="sl2"></span></label></div>
         <div class="row" style="padding:6px 0"><span class="lbl">V13 自定义目标</span><label class="sw"><input type="checkbox" id="swH3Cust" onchange="speedMutex('custom',this.checked)"><span class="sl2"></span></label></div>
