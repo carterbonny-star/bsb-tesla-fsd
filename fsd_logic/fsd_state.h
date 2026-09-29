@@ -386,6 +386,19 @@ typedef struct FSDState {
     float vision_speed_limit_kph;
     float acc_speed_limit_kph;
 
+    // BSB CN read-only validation fields from the private-group implementation.
+    // These are diagnostics only: they never gate TX and never modify CAN frames.
+    bool private399_limit_seen;       // candidate posted limit seen on 0x399 byte1
+    uint8_t private399_raw_limit;     // raw byte1 value
+    float private399_limit_kph;       // raw * 5, only when value is whitelisted
+    uint32_t private399_last_ms;
+    bool ap3fd_diag_seen;             // at least one 0x3FD observed
+    uint8_t ap3fd_mux;                // data[0] & 0x07
+    uint8_t ap3fd_offset_raw;         // mux2: data[1] & 0x3F (candidate offset %)
+    uint8_t ap3fd_profile_raw;        // mux2: data[7] bits 6:4
+    uint32_t ap3fd_last_ms;
+    uint8_t follow_distance_raw;      // 0x3F8 byte5 bits 7:5
+
     // T-Display (ESP32 BOARD_TTGO_DISPLAY); kept unconditionally so the struct
     // layout is identical across boards.
     bool display_enabled;
