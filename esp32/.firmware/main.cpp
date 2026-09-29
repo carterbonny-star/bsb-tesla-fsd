@@ -1175,6 +1175,40 @@ static void process_frame(CanBusId bus, const CanFrame &frame) {
     if (frame.id == CAN_ID_BMS_SOC)     { state_enter(); fsd_handle_bms_soc(&g_state, &frame);     state_exit(); return; }
     if (frame.id == CAN_ID_BMS_THERMAL) { state_enter(); fsd_handle_bms_thermal(&g_state, &frame); state_exit(); return; }
 
+    // ── BSB CN speed-offset validation (read-only, always) ───────────────────
+    // Private-group reference implementation uses 0x399 byte1 * 5 as a posted
+    // speed-limit candidate and 0x3FD mux2 byte1[5:0] / byte7[6:4] as the
+    // candidate offset/profile fields. Observe only; do not modify or gate TX.
+    if (frame.id == CAN_ID_DAS_STATUS_HW3 && frame.dlc >= 2) {
+        uint8_t raw = frame.data[1];
+        uint8_t kph = (uint8_t)(raw * 5u);
+        bool valid =
+            kph == 15u || kph == 20u || kph == 25u || kph == 30u ||
+            kph == 35u || kph == 40u || kph == 45u || kph == 50u ||
+            kph == 55u || kph == 60u || kph == 70u || kph == 80u ||
+            kph == 90u || kph == 100u || kph == 110u || kph == 120u;
+        if (valid) {
+            state_enter();
+            g_state.private399_limit_seen = true;
+            g_state.private399_raw_limit = raw;
+            g_state.private399_limit_kph = (float)kph;
+            g_state.private399_last_ms = now;
+            state_exit();
+        }
+    }
+    if (frame.id == CAN_ID_AP_CONTROL && frame.dlc >= 8) {
+        uint8_t mux = frame.data[0] & 0x07u;
+        state_enter();
+        g_state.ap3fd_diag_seen = true;
+        g_state.ap3fd_mux = mux;
+        g_state.ap3fd_last_ms = now;
+        if (mux == 2u) {
+            g_state.ap3fd_offset_raw = frame.data[1] & 0x3Fu;
+            g_state.ap3fd_profile_raw = (frame.data[7] >> 4) & 0x07u;
+        }
+        state_exit();
+    }
+
     // ── DAS status (read-only, always) — gating for NAG killer ───────────────
     // Skipped when a custom DAS source is configured (#122) — config owns it.
     FSDState das_state = state_snapshot();
