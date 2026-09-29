@@ -1727,7 +1727,13 @@ static String json_escape(const char *s) {
 
 // ── JSON builder ──────────────────────────────────────────────────────────────
 static String build_json() {
-    FSDState state;
+    // build_json() runs from the Arduino loopTask, including from the
+    // WebSocket CONNECT callback. FSDState has grown large enough that keeping
+    // a full snapshot as a local variable can exhaust the loopTask stack on a
+    // browser refresh/reconnect (stack-canary panic in snprintf/build_json).
+    // Keep the snapshot in static storage instead; state_copy() still refreshes
+    // the complete snapshot before every JSON build.
+    static FSDState state;
     if (!state_copy(&state)) return "{}";
 
     uint32_t uptime_s = (millis() - g_start_ms) / 1000;
