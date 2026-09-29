@@ -224,7 +224,14 @@ typedef struct FSDState {
     uint8_t hw3_drive_style;     // 0=Auto, 1=Chill, 2=Normal, 3=Hurry (HW3 only)
     uint8_t hw4_offset;          // HW4 mux=2 speed offset override (0 = no override)
 
-    // Speed-offset controller ported from esp32s3_waveshare_wifi_v1.4.33.
+    // Source-matched smart offset settings.
+    uint8_t hw3_offset_mode;       // 0=manual, 1=auto, 2=custom
+    uint8_t hw3_manual_offset;     // manual percentage, 0..63
+    uint8_t hw3_custom_pct[4];     // <=50, <=70, <=100, >100 km/h
+    float hw3_smooth_target_kph;   // runtime smoothed target speed
+    uint32_t hw3_smooth_last_ms;   // runtime smoothing timestamp
+
+    // Legacy speed-offset settings retained for compatibility with older UI/NVS.
     // HW3/V13: automatic/custom target-speed logic for posted limits, optional
     // smooth downward slew, and >=80 km/h percentage buckets.
     bool hw3_auto_speed;
