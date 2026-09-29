@@ -416,6 +416,33 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   </div>
 </div>
 
+<!-- HTTP CAN Log: kept expanded near the top for speed-offset validation -->
+<div class="card">
+  <div class="card-head"><div class="icon ic-d">L</div><h2>HTTP CAN Log / MARK TAP</h2>
+    <span class="pill off" id="httpLogSt" style="margin-left:auto"><span class="pd"></span>Idle</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Filter IDs</span>
+    <input id="httpLogFilter" class="log-filter" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="0x399,0x3FD,0x3F8">
+  </div>
+  <div class="row">
+    <span class="lbl">Buffered</span>
+    <span id="httpLogBuf" style="font-size:.8em;color:var(--text2)">0 frames</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Dropped</span>
+    <span id="httpLogDrop" style="font-size:.8em;color:var(--text2)">0 frames</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Filtered</span>
+    <span id="httpLogFiltered" style="font-size:.8em;color:var(--text2)">0 frames</span>
+  </div>
+  <div id="httpLogInfo" class="log-info">Ready to collect 0x399 / 0x3FD / 0x3F8 in this browser.</div>
+  <button id="btnMarkTap" type="button" class="btn-main btn-yellow" onclick="markHttpTap()" disabled style="margin:10px 0 8px;font-size:1.08em">MARK TAP</button>
+  <button id="btnHttpLog" type="button" class="btn-main btn-blue" onclick="toggleHttpLog()">STREAM LOG AND SAVE</button>
+  <div id="httpTapInfo" class="log-info" style="margin-top:4px">Start logging, then press MARK TAP immediately after the event you want to align. The marker is written into the saved .dump as a #-comment.</div>
+</div>
+
 <!-- Battery / BMS diagnostics -->
 <details class="config-section" id="batterySection">
   <summary><div class="icon ic-b">B</div><div class="card-head" style="margin:0"><h2>车辆电池 / BMS（诊断）</h2></div><span id="batterySummary" style="margin-left:auto;font-size:.72em;color:var(--text3)">未检测</span></summary>
@@ -758,36 +785,7 @@ R"rawliteral(
   <summary><div class="icon ic-c">A</div><div class="card-head" style="margin:0"><h2>管理</h2></div></summary>
   <div class="config-body">
 
-<!-- HTTP CAN Log -->
-<div class="card">
-  <div class="card-head"><div class="icon ic-d">L</div><h2>HTTP CAN Log</h2></div>
-  <div class="row">
-    <span class="lbl">Stream</span>
-    <span class="pill off" id="httpLogSt"><span class="pd"></span>Idle</span>
-  </div>
-  <div class="row">
-    <span class="lbl">Filter IDs</span>
-    <input id="httpLogFilter" class="log-filter" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0x370, 0x3FD">
-  </div>
-  <div class="row">
-    <span class="lbl">Buffered</span>
-    <span id="httpLogBuf" style="font-size:.8em;color:var(--text2)">0 frames</span>
-  </div>
-  <div class="row">
-    <span class="lbl">Dropped</span>
-    <span id="httpLogDrop" style="font-size:.8em;color:var(--text2)">0 frames</span>
-  </div>
-  <div class="row">
-    <span class="lbl">Filtered</span>
-    <span id="httpLogFiltered" style="font-size:.8em;color:var(--text2)">0 frames</span>
-  </div>
-  <div id="httpLogInfo" class="log-info">Ready to collect a candump file in this browser.</div>
-  <div class="log-actions">
-    <button id="btnHttpLog" type="button" class="btn-main btn-blue" onclick="toggleHttpLog()">STREAM LOG AND SAVE</button>
-    <button id="btnMarkTap" type="button" class="btn-main btn-yellow" onclick="markHttpTap()" disabled style="margin-top:8px">MARK TAP</button>
-  </div>
-  <div id="httpTapInfo" class="log-info" style="margin-top:8px">Start logging, then tap MARK TAP immediately after touching the Tesla speed/limit area. The marker is written into the saved .dump as a #-comment.</div>
-</div>
+
 
 <!-- WiFi Config -->
 <div class="card">
