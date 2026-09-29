@@ -206,6 +206,7 @@ void fsd_handle_follow_distance(FSDState *state, const CanFrame *frame) {
     // Follow distance stalk position: bits 7:5 of byte 5
     uint8_t fd = (frame->data[SIG_FOLLOW_DIST_BYTE] & SIG_FOLLOW_DIST_MASK) >>
                  SIG_FOLLOW_DIST_SHIFT;
+    state->follow_distance_raw = fd;
 
     if (fsd_protocol_is_v13(state)) {
         // V13 protocol: 3 levels  (fd 1→profile 2, 2→1, 3→0)
@@ -1181,24 +1182,13 @@ void fsd_handle_das_control(FSDState *state, const CanFrame *frame) {
         frame->data[SIG_DAS_CONTROL_SET_SPEED_LOW_BYTE];
     if (raw == SIG_DAS_CONTROL_SET_SPEED_SNA) return;
 
+    // Keep the upstream 0x2B9 decode for compatibility/telemetry, but do not use
+    // it as a touchscreen/set-speed event source. On the tested HW4 + v13.2.9
+    // vehicle this layout produced false events, so speed-offset validation now
+    // follows the read-only 0x399 -> 0x3FD path instead.
     float set_kph = (float)raw * SIG_DAS_CONTROL_SET_SPEED_SCALE_KPH;
     state->cruise_set_speed_kph = set_kph;
     state->cruise_set_speed_seen = true;
-
-    // Read-only diagnostic: treat a >=1.0 km/h change in DAS_setSpeed as a
-    // candidate touchscreen / set-speed event. This does not modify any CAN data.
-    if (!state->hw3_setspeed_seen) {
-        state->hw3_setspeed_seen = true;
-        state->hw3_setspeed_last_kph = set_kph;
-    } else {
-        float delta = set_kph - state->hw3_setspeed_last_kph;
-        if (delta < 0.0f) delta = -delta;
-        if (delta >= 1.0f) {
-            state->hw3_setspeed_trigger_ms = millis();
-            state->hw3_setspeed_trigger_count++;
-        }
-        state->hw3_setspeed_last_kph = set_kph;
-    }
 }
 
 void fsd_handle_vcfront_lighting(FSDState *state, const CanFrame *frame) {
