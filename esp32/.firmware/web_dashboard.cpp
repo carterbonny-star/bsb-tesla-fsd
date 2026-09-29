@@ -1814,6 +1814,10 @@ static String build_json() {
     j += "\"ap3fd_offset_raw\":"; j += (int)state.ap3fd_offset_raw; j += ',';
     j += "\"ap3fd_profile_raw\":"; j += (int)state.ap3fd_profile_raw; j += ',';
     j += "\"follow_distance_raw\":"; j += (int)state.follow_distance_raw; j += ',';
+    j += "\"hw3_offset_mode\":"; j += (int)state.hw3_offset_mode; j += ',';
+    j += "\"hw3_manual_offset\":"; j += (int)state.hw3_manual_offset; j += ',';
+    j += "\"hw3_custom_pct\":[";
+    for (int i=0;i<4;i++){ if(i)j+=','; j+=(int)state.hw3_custom_pct[i]; } j += "],";
     j += "\"hw3_auto_speed\":"; j += state.hw3_auto_speed ? "true" : "false"; j += ',';
     j += "\"hw3_custom_speed\":"; j += state.hw3_custom_speed ? "true" : "false"; j += ',';
     j += "\"hw3_custom_target\":[";
@@ -2040,7 +2044,10 @@ static void ws_event(uint8_t num, WStype_t type,
             state_exit();
             prefs_save(&saved);
         }
-    } else if (strstr(buf, "\"hw3_auto_speed\"") || strstr(buf, "\"hw3_custom_speed\"") ||
+    } else if (strstr(buf, "\"hw3_offset_mode\"") || strstr(buf, "\"hw3_manual_offset\"") ||
+               strstr(buf, "\"hw3_cp0\"") || strstr(buf, "\"hw3_cp1\"") ||
+               strstr(buf, "\"hw3_cp2\"") || strstr(buf, "\"hw3_cp3\"") ||
+               strstr(buf, "\"hw3_auto_speed\"") || strstr(buf, "\"hw3_custom_speed\"") ||
                strstr(buf, "\"hw3_offset_slew\"") || strstr(buf, "\"hw3_slew_rate\"") ||
                strstr(buf, "\"hw3_high_speed_enable\"") || strstr(buf, "\"hw4_offset\"") ||
                strstr(buf, "\"hw3_ct0\"") || strstr(buf, "\"hw3_ct1\"") || strstr(buf, "\"hw3_ct2\"") ||
@@ -2053,7 +2060,13 @@ static void ws_event(uint8_t num, WStype_t type,
             int iv = atoi(vptr);
             FSDState saved;
             state_enter();
-            if (strstr(buf, "\"hw3_auto_speed\"")) { g_state->hw3_auto_speed=bv; if(bv)g_state->hw3_custom_speed=false; }
+            if (strstr(buf, "\"hw3_offset_mode\"")) g_state->hw3_offset_mode=(uint8_t)((iv<0)?0:(iv>2?2:iv));
+            else if (strstr(buf, "\"hw3_manual_offset\"")) g_state->hw3_manual_offset=(uint8_t)((iv<0)?0:(iv>63?63:iv));
+            else if (strstr(buf, "\"hw3_cp0\"")) g_state->hw3_custom_pct[0]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
+            else if (strstr(buf, "\"hw3_cp1\"")) g_state->hw3_custom_pct[1]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
+            else if (strstr(buf, "\"hw3_cp2\"")) g_state->hw3_custom_pct[2]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
+            else if (strstr(buf, "\"hw3_cp3\"")) g_state->hw3_custom_pct[3]=(uint8_t)((iv<0)?0:(iv>63?63:iv));
+            else if (strstr(buf, "\"hw3_auto_speed\"")) { g_state->hw3_auto_speed=bv; if(bv)g_state->hw3_custom_speed=false; }
             else if (strstr(buf, "\"hw3_custom_speed\"")) { g_state->hw3_custom_speed=bv; if(bv)g_state->hw3_auto_speed=false; }
             else if (strstr(buf, "\"hw3_offset_slew\"")) g_state->hw3_offset_slew=bv;
             else if (strstr(buf, "\"hw3_slew_rate\"")) g_state->hw3_slew_rate=(uint8_t)((iv<1)?1:(iv>25?25:iv));
