@@ -1020,7 +1020,9 @@ function speedText(v,seen,source){
   var src=source?'<small> '+source+'</small>':'';
   return Math.round(v)+' km/h'+src;
 }
+var currentControlTier='regular';
 function setControlTier(tier){
+  currentControlTier=tier;
   var rows=document.querySelectorAll('#tierControls [data-tier]');
   for(var i=0;i<rows.length;i++) rows[i].style.display=(rows[i].getAttribute('data-tier')===tier)?'':'none';
   var ids={regular:'tierRegular',advanced:'tierAdvanced',experimental:'tierExperimental'};
@@ -1283,7 +1285,7 @@ function upd(d){
   if(document.getElementById('swFsd')) document.getElementById('swFsd').checked=d.force_fsd;
   if(document.getElementById('swChina')) document.getElementById('swChina').checked=d.china_mode;
   if(document.getElementById('swChime')) document.getElementById('swChime').checked=d.suppress_speed_chime;
-  if(document.getElementById('rowChime')) document.getElementById('rowChime').style.display=d.isa_speed_enabled?'flex':'none';
+  if(document.getElementById('rowChime')) document.getElementById('rowChime').style.display=(d.isa_speed_enabled&&currentControlTier==='regular')?'flex':'none';
   if(document.getElementById('swTlssc')) document.getElementById('swTlssc').checked=d.tlssc_restore;
   if(document.getElementById('swSummon')) document.getElementById('swSummon').checked=d.summon_unlock;
   if(document.getElementById('swCog')) document.getElementById('swCog').checked=d.continue_on_green;
