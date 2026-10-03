@@ -523,7 +523,7 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
     </select>
   </div>
   <div class="row" id="rowDriveStyle">
-    <span class="lbl">驾驶风格<br><span class="hint">源码映射：自动跟随，或锁定 0–4；V13 写入低 2 位</span></span>
+    <span class="lbl">驾驶风格<br><span class="hint">源码映射：自动跟随，或锁定 0–4；编码位置跟随物理 HW 布局</span></span>
     <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
       <option value="0">自动（跟随原车）</option>
       <option value="1">轻松</option>
@@ -1131,7 +1131,7 @@ function upd(d){
   speedSetVal('manualOffset',d.hw3_manual_offset);
   if(Array.isArray(d.hw3_custom_pct))for(var i=0;i<4;i++)speedSetVal('cp'+i,d.hw3_custom_pct[i]);
   var rv=document.getElementById('researchValues');
-  if(rv)rv.textContent='目标 '+Number(d.research_target_kph||0).toFixed(2)+' / 平滑 '+Number(d.research_smooth_kph||0).toFixed(2)+' / cap '+Number(d.research_cap_kph||0).toFixed(0)+' km/h；模拟帧 can0='+d.mock_can0+'，can1='+d.mock_can1+'；物理 TX=0';
+  if(rv){var hwl=(d.hw_override&&d.hw_override!==0)?d.hw_override:d.hw_version;var hwt=hwl===3?'HW4':(hwl===2?'HW3':'未知');rv.textContent='目标 '+Number(d.research_target_kph||0).toFixed(2)+' / 平滑 '+Number(d.research_smooth_kph||0).toFixed(2)+' / cap '+Number(d.research_cap_kph||0).toFixed(0)+' km/h；布局 '+hwt+'；模拟帧 can0='+d.mock_can0+'，can1='+d.mock_can1+'；物理 TX=0';}
 
   var ct=document.getElementById('chipTemp'),ctm=document.getElementById('chipTempMax');
   if(ct)ct.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1)+' °C':'--';
