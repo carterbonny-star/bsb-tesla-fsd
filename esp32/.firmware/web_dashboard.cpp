@@ -668,6 +668,10 @@ html{scroll-behavior:smooth}
   <div class="control-tier-note" id="tierNote">日常设置。复杂兼容选项和未经充分验证的功能分别放在“高级 / 实验”。</div>
   <div class="controls-body" id="tierControls">
   <div class="row" data-tier="advanced">
+    <span class="lbl">物理 TX（台架预留）<br><span class="hint">当前研究固件保持禁用；此项仅作为今后台架测试入口。</span></span>
+    <label class="sw"><input type="checkbox" id="swBenchTxReserved" disabled><span class="sl2"></span></label>
+  </div>
+  <div class="row" data-tier="advanced">
     <span class="lbl">忽略 OTA</span>
     <label class="sw"><input type="checkbox" id="swIgnoreOta" onchange="cmd('ignore_ota',this.checked)"><span class="sl2"></span></label>
   </div>
