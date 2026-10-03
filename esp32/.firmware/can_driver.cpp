@@ -39,14 +39,18 @@ class TwaiDriver : public CanDriver {
         // incapable of transmitting — zero ban risk from injected frames.
         listen_only = true;
 #endif
+        twai_mode_t mode = TWAI_MODE_LISTEN_ONLY;
+#if defined(BENCH_PHYSICAL_TX)
+        if (!listen_only) mode = TWAI_MODE_NORMAL;
+#endif
         twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(
             (gpio_num_t)tx_pin_,
             (gpio_num_t)rx_pin_,
-            TWAI_MODE_LISTEN_ONLY);
+            mode);
         // Queue depths: 64 RX (busy Vehicle CAN can deliver thousands of
         // frames/s; a deeper queue cuts controller-level drops), 5 TX.
         g.rx_queue_len = 64;
-        g.tx_queue_len = 0;
+        g.tx_queue_len = listen_only ? 0 : 5;
 
         twai_timing_config_t t = TWAI_TIMING_CONFIG_500KBITS();
         twai_filter_config_t f;
@@ -85,7 +89,9 @@ public:
         : label_(label), tx_pin_(tx_pin), rx_pin_(rx_pin) {}
 
     bool begin(bool listen_only) override {
+#if !defined(BENCH_PHYSICAL_TX)
         listen_only = true;
+#endif
         bool ok = install_and_start(listen_only);
         Serial.printf("[CAN] %s TWAI %s @ 500 kbps (TX=%d RX=%d)\n",
                       label_, ok ? (listen_only ? "Listen-Only" : "Normal") : "FAILED",
@@ -94,8 +100,23 @@ public:
     }
 
     bool send(const CanFrame &frame) override {
+#if defined(BENCH_PHYSICAL_TX)
+        if (listen_only_ || !installed_ || frame.dlc > 8 || frame.id > 0x7FF) return false;
+        twai_message_t msg = {};
+        msg.identifier = frame.id;
+        msg.extd = 0;
+        msg.rtr = 0;
+        msg.data_length_code = frame.dlc;
+        memcpy(msg.data, frame.data, frame.dlc);
+        if (twai_transmit(&msg, pdMS_TO_TICKS(10)) == ESP_OK) {
+            tx_count_++;
+            return true;
+        }
+        return false;
+#else
         (void)frame;
-        return false; // No physical TX implementation is compiled into this branch.
+        return false; // Standard research builds compile no physical TX path.
+#endif
     }
 
     bool receive(CanFrame &frame) override {
@@ -172,9 +193,11 @@ public:
     }
 
     void setListenOnly(bool enable) override {
+#if !defined(BENCH_PHYSICAL_TX)
         enable = true;
+#endif
 #ifdef SNIFFER_ONLY
-        (void)enable;   // sniffer build is permanently Listen-Only; ignore mode switches
+        (void)enable;   // standard research build is permanently Listen-Only
         return;
 #endif
         if (listen_only_ == enable) return;
