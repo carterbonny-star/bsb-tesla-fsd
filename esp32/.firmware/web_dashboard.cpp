@@ -333,6 +333,22 @@ html{scroll-behavior:smooth}
 .quick-l{display:block;margin-top:3px;font-size:.65em;color:var(--text3)}
 .section-anchor{scroll-margin-top:10px}
 @media(max-width:430px){.quick-grid{grid-template-columns:repeat(2,1fr)}}
+.speed-panel .speed-live{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.speed-panel .speed-live>div{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.speed-panel .speed-live b{display:block;font-size:1.2em;font-variant-numeric:tabular-nums}
+.speed-panel .speed-live span{display:block;margin-top:3px;font-size:.65em;color:var(--text3)}
+.target-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.target-cell{border:1px solid var(--border);background:var(--card2);border-radius:9px;padding:8px 4px;text-align:center;transition:.15s}
+.target-cell strong{display:block;font-size:.82em}
+.target-cell small{display:block;color:var(--text3);font-size:.62em;margin-top:2px}
+.target-cell.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(55,212,150,.25);background:rgba(55,212,150,.08)}
+.speed-advanced{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.speed-advanced summary{cursor:pointer;color:var(--blue);font-size:.76em;font-weight:700}
+.speed-notice{font-size:.7em;color:var(--text3);line-height:1.5;margin-top:10px}
+@media(max-width:430px){
+  .target-grid{grid-template-columns:repeat(3,1fr)}
+  .speed-panel .speed-live{grid-template-columns:repeat(3,1fr)}
+}
 </style>
 </head>
 <body>
@@ -458,7 +474,7 @@ html{scroll-behavior:smooth}
 
 <!-- HTTP CAN Log: PERF TEST / research capture -->
 <div class="card section-anchor" id="perfTestSection">
-  <div class="card-head"><div class="icon ic-d">L</div><h2>CAN 研究日志</h2>
+  <div class="card-head"><div class="icon ic-d">P</div><h2>PERF TEST / CAN 研究</h2>
     <span class="pill off" id="httpLogSt" style="margin-left:auto"><span class="pd"></span>Idle</span>
   </div>
   <div class="row">
@@ -538,9 +554,56 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- 1.4.33-inspired speed strategy: simple first, advanced details folded -->
+<div class="card speed-panel section-anchor" id="speedSection">
+  <div class="card-head"><div class="icon ic-s">S</div><h2>速度策略</h2></div>
+  <div class="row">
+    <span class="lbl">模式</span>
+    <select id="offsetMode" onchange="cmd('hw3_offset_mode',parseInt(this.value,10))">
+      <option value="0">手动偏移</option>
+      <option value="1">自动目标</option>
+      <option value="2">自定义分区</option>
+    </select>
+  </div>
+  <div class="speed-live">
+    <div><b id="spdLimitNow">--</b><span>当前限速 km/h</span></div>
+    <div><b id="spdTargetNow">--</b><span>目标速度 km/h</span></div>
+    <div><b id="spdOffNow">--</b><span>当前偏移 %</span></div>
+  </div>
+  <div class="hint">自动目标参考表（按当前研究源码算法）</div>
+  <div class="target-grid" id="targetGrid">
+    <div class="target-cell" data-limit="30"><strong>30 → 49</strong><small>+63%</small></div>
+    <div class="target-cell" data-limit="40"><strong>40 → 60</strong><small>+50%</small></div>
+    <div class="target-cell" data-limit="50"><strong>50 → 75</strong><small>+50%</small></div>
+    <div class="target-cell" data-limit="60"><strong>60 → 90</strong><small>+50%</small></div>
+    <div class="target-cell" data-limit="70"><strong>70 → 91</strong><small>+30%</small></div>
+    <div class="target-cell" data-limit="80"><strong>80 → 104</strong><small>+30%</small></div>
+    <div class="target-cell" data-limit="90"><strong>90 → 117</strong><small>+30%</small></div>
+    <div class="target-cell" data-limit="100"><strong>100 → 120</strong><small>+20%</small></div>
+    <div class="target-cell" data-limit="110"><strong>110 → 132</strong><small>+20%</small></div>
+    <div class="target-cell" data-limit="120"><strong>120 → 132</strong><small>+10%</small></div>
+  </div>
+  <details class="speed-advanced">
+    <summary>高级设置 / 研究参数</summary>
+    <div class="row"><span class="lbl">手动偏移 %</span><input id="manualOffset" type="number" min="0" max="63" onchange="speedNum('hw3_manual_offset',this,0,63)"></div>
+    <div class="speed-bands">
+      <label class="speed-band">≤50 km/h <input id="cp0" type="number" min="0" max="63" onchange="speedNum('hw3_cp0',this,0,63)">%</label>
+      <label class="speed-band">≤70 km/h <input id="cp1" type="number" min="0" max="63" onchange="speedNum('hw3_cp1',this,0,63)">%</label>
+      <label class="speed-band">≤100 km/h <input id="cp2" type="number" min="0" max="63" onchange="speedNum('hw3_cp2',this,0,63)">%</label>
+      <label class="speed-band">&gt;100 km/h <input id="cp3" type="number" min="0" max="63" onchange="speedNum('hw3_cp3',this,0,63)">%</label>
+    </div>
+    <p class="hint">15–45 km/h 使用源码固定规则，优先于手动/自定义。自动：50–60 +50%，70–90 +30%，100–110 +20%，120 +10%。</p>
+    <p class="hint">目标 cap：15–40→60，45→67，50→75，55→82，60→90，70→91，80→104，90→117，100→120，110–120→132 km/h。</p>
+    <p class="hint">下降按 3 km/h/s 平滑；至少 0.5 秒更新一次。偏移字段限制 0–63%。</p>
+    <div>目标偏移 <b id="spdOffTarget">--</b>%</div>
+    <div id="researchValues">等待回放</div>
+  </details>
+  <div class="speed-notice">界面参考 1.4.33 的“目标速度优先”交互，但数值与编码仍采用当前研究分支的源码模型。</div>
+</div>
+
 <!-- Controls -->
-<div class="card controls-section section-anchor" id="speedSection">
-  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD / 速度策略</h2></div>
+<div class="card controls-section">
+  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD 控制</h2></div>
   <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">启用</button>
 <details class="controls-fold">
   <summary><span id="controlsSummary" class="control-summary">...</span></summary>
@@ -572,24 +635,6 @@ html{scroll-behavior:smooth}
       <option value="4">狂飙（3）</option>
       <option value="5">极限（4）</option>
     </select>
-  </div>
-  <div class="row speed-offset">
-    <span class="lbl">智能速度偏移<br><span class="hint">研究计算；物理 CAN TX 永久禁用</span></span>
-    <div style="flex:1;min-width:0">
-      <div class="row"><span class="lbl">模式</span><select id="offsetMode" onchange="cmd('hw3_offset_mode',parseInt(this.value,10))"><option value="0">手动</option><option value="1">自动</option><option value="2">自定义</option></select></div>
-      <div class="row"><span class="lbl">手动偏移 %</span><input id="manualOffset" type="number" min="0" max="63" onchange="speedNum('hw3_manual_offset',this,0,63)"></div>
-      <div class="speed-bands">
-        <label class="speed-band">≤50 km/h <input id="cp0" type="number" min="0" max="63" onchange="speedNum('hw3_cp0',this,0,63)">%</label>
-        <label class="speed-band">≤70 km/h <input id="cp1" type="number" min="0" max="63" onchange="speedNum('hw3_cp1',this,0,63)">%</label>
-        <label class="speed-band">≤100 km/h <input id="cp2" type="number" min="0" max="63" onchange="speedNum('hw3_cp2',this,0,63)">%</label>
-        <label class="speed-band">&gt;100 km/h <input id="cp3" type="number" min="0" max="63" onchange="speedNum('hw3_cp3',this,0,63)">%</label>
-      </div>
-      <p class="hint">15–45 km/h 使用源码固定规则，优先于上述模式。自动：50–60 +50%，70–90 +30%，100–110 +20%，120 +10%。</p>
-      <p class="hint">目标 cap：15–40→60，45→67，50→75，55→82，60→90，70→91，80→104，90→117，100→120，110–120→132 km/h。</p>
-      <p class="hint">下降 3 km/h/s；至少 0.5 秒更新一次，单次按最多 1 秒计算。cap 先于平滑下降应用，下降期间平滑值可暂时超过新 cap。</p>
-      <div>限速 <b id="spdLimitNow">--</b> · 目标偏移 <b id="spdOffTarget">--</b>% · 当前 <b id="spdOffNow">--</b>%</div>
-      <div id="researchValues">等待回放</div>
-    </div>
   </div>
   <div class="row">
     <span class="lbl">忽略 OTA</span>
@@ -1161,6 +1206,8 @@ function upd(d){
   var sl=document.getElementById('spdLimitNow'); if(sl)sl.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
   var st=document.getElementById('spdOffTarget'); if(st)st.textContent=(d.hw3_offset_target!==undefined)?d.hw3_offset_target:'--';
   var sn=document.getElementById('spdOffNow'); if(sn)sn.textContent=(d.speed_offset!==undefined)?d.speed_offset:'--';
+  var stn=document.getElementById('spdTargetNow'); if(stn)stn.textContent=d.private399_limit_seen?Number(d.research_target_kph||0).toFixed(0):'--';
+  var tg=document.querySelectorAll('#targetGrid .target-cell'); if(tg&&tg.length){var _lim=d.private399_limit_seen?Math.round(Number(d.private399_limit_kph||0)):0;for(var _i=0;_i<tg.length;_i++)tg[_i].classList.toggle('active',Number(tg[_i].getAttribute('data-limit'))===_lim);}
   var d399=document.getElementById('diag399Limit'); if(d399)d399.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
   var d399r=document.getElementById('diag399Raw'); if(d399r)d399r.textContent=d.private399_limit_seen?String(d.private399_raw_limit):'--';
   var d3m=document.getElementById('diag3fdMux'); if(d3m)d3m.textContent=d.ap3fd_diag_seen?String(d.ap3fd_mux):'--';
