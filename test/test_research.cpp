@@ -65,21 +65,64 @@ int main() {
         CHECK(s.private399_limit_seen==research_limit_valid(raw*5));
         if(!s.private399_limit_seen) CHECK(s.speed_offset==0);
     }
-    // Golden encodings preserve every unrelated bit; source V13 truncates profile4.
-    for(unsigned proto=13;proto<=14;++proto) for(unsigned profile=0;profile<5;++profile) {
-        s=active(); s.fsd_protocol_mode=proto; research_speed_update(&s,1000);
+    // Golden encodings: protocol semantics and physical-HW byte layout are
+    // independent, matching the supplied source. In particular HW4+V13 keeps
+    // the HW4 mux2 byte1/byte7 layout, while HW3+V14 keeps HW3 mux0 layout.
+    for(unsigned proto=13;proto<=14;++proto)
+    for(unsigned hw=TeslaHW_HW3;hw<=TeslaHW_HW4;++hw)
+    for(unsigned profile=0;profile<5;++profile) {
+        s=active(); s.fsd_protocol_mode=proto; s.hw_version=(TeslaHWVersion)hw;
+        research_speed_update(&s,1000);
         s.research_profile=profile; s.speed_offset=37;
         for(unsigned mux=0;mux<8;++mux) {
             CANFRAME f=frame(0x3FD,mux); memset(f.data,0x85,8); f.data[0]=(uint8_t)(0xA0|mux);
             CANFRAME expected=f;
             unsigned emissions=0;
-            if(proto==13 && mux==0) { expected.data[5]=0xC5; expected.data[4]=0xE5; expected.data[6]=(uint8_t)(0x81|((profile&3)<<1)); emissions=2; }
-            if(proto==13 && mux==1) { expected.data[2]=0x85; expected.data[5]=0xA5; emissions=2; }
-            if(proto==14 && mux==0) { expected.data[5]=0xC5; expected.data[7]=0x95; expected.data[4]=0xC5; emissions=2; }
-            if(proto==14 && mux==1) { expected.data[5]=0xA5; emissions=2; }
-            if(proto==14 && mux==2) { expected.data[7]=(uint8_t)(0x85|(profile<<4)); expected.data[1]=0xA5; emissions=2; }
-            CHECK(research_calculate(&s,0,&f)==emissions); CHECK(!memcmp(f.data,expected.data,8));
+            const bool hw4=(hw==TeslaHW_HW4);
+            if(proto==14 && hw4 && mux==0) {
+                expected.data[5]=0xC5; expected.data[7]=0x95; expected.data[4]=0xC5; emissions=2;
+            }
+            if(proto==14 && hw4 && mux==1) {
+                expected.data[5]=0xA5; emissions=2;
+            }
+            if(proto==14 && hw4 && mux==2) {
+                expected.data[7]=(uint8_t)(0x85|(profile<<4)); expected.data[1]=0xA5; emissions=2;
+            }
+            if(proto==14 && !hw4 && mux==0) {
+                expected.data[5]=0xC5; expected.data[4]=0xE5;
+                expected.data[6]=(uint8_t)(0x81|((profile&3)<<1)); emissions=2;
+            }
+            if(proto==14 && !hw4 && mux==1) {
+                expected.data[5]=0xA5; emissions=2;
+            }
+            if(proto==13 && hw4 && mux==0) {
+                expected.data[5]=0xC5; expected.data[7]=0x95; expected.data[4]=0xC5; emissions=2;
+            }
+            if(proto==13 && hw4 && mux==1) {
+                expected.data[2]=0x85; expected.data[5]=0xA5; emissions=2;
+            }
+            if(proto==13 && hw4 && mux==2) {
+                expected.data[7]=(uint8_t)(0x85|(profile<<4)); expected.data[1]=0xA5; emissions=2;
+            }
+            if(proto==13 && !hw4 && mux==0) {
+                expected.data[5]=0xC5; expected.data[4]=0xE5;
+                expected.data[6]=(uint8_t)(0x81|((profile&3)<<1)); emissions=2;
+            }
+            if(proto==13 && !hw4 && mux==1) {
+                expected.data[2]=0x85; expected.data[5]=0xA5; emissions=2;
+            }
+            CHECK(research_calculate(&s,0,&f)==emissions);
+            CHECK(!memcmp(f.data,expected.data,8));
         }
+    }
+    // Manual HW override controls layout without changing protocol selection.
+    s=active(); s.fsd_protocol_mode=13; s.hw_version=TeslaHW_HW4; s.hw_override=TeslaHW_HW3;
+    research_speed_update(&s,1000); s.research_profile=2; s.speed_offset=37;
+    {
+        CANFRAME f=frame(0x3FD,0); memset(f.data,0x85,8); f.data[0]=0xA0;
+        CHECK(research_calculate(&s,0,&f)==2);
+        CHECK((f.data[4]&0x3F)==37);
+        CHECK((f.data[6]&0x06)==((2&3)<<1));
     }
     const unsigned map[]={1,3,2,1,0,4,1,1};
     s=active(); s.fsd_protocol_mode=0; s.research_protocol_detected=14;
