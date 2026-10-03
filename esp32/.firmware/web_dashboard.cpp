@@ -447,6 +447,51 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- Common FSD controls: kept above status for quick access -->
+<div class="card controls-section">
+  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD 常用控制</h2></div>
+  <div class="row">
+    <span class="lbl">FSD 激活</span>
+    <label class="sw"><input type="checkbox" id="swFsdUnlock" onchange="cmd('fsd_unlock',this.checked)"><span class="sl2"></span></label>
+  </div>
+  <div class="row">
+    <span class="lbl">NAG Killer</span>
+    <label class="sw"><input type="checkbox" id="swNag" onchange="cmd('nag',this.checked)"><span class="sl2"></span></label>
+  </div>
+  <div class="row">
+    <span class="lbl">Force FSD</span>
+    <label class="sw"><input type="checkbox" id="swFsd" onchange="cmd('force_fsd',this.checked)"><span class="sl2"></span></label>
+  </div>
+  <div class="row">
+    <span class="lbl">车辆硬件<br><span class="hint">建议自动识别；必要时可手动选择实际 HW3 / HW4。</span></span>
+    <select id="selHwOverride" onchange="cmd('hw_override',parseInt(this.value,10))">
+      <option value="0">自动识别</option>
+      <option value="3">强制 HW4</option>
+      <option value="2">强制 HW3</option>
+      <option value="1">强制 Legacy</option>
+    </select>
+  </div>
+  <div class="row">
+    <span class="lbl">FSD 协议<br><span class="hint">与物理硬件分开设置。</span></span>
+    <select id="selProtocol" onchange="cmd('fsd_protocol',parseInt(this.value,10))">
+      <option value="0">自动</option>
+      <option value="13">V13</option>
+      <option value="14">V14</option>
+    </select>
+  </div>
+  <div class="row" id="rowDriveStyle">
+    <span class="lbl">驾驶风格<br><span class="hint">自动跟随原车，或手动锁定 0–4。</span></span>
+    <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
+      <option value="0">自动（跟随原车）</option>
+      <option value="1">轻松</option>
+      <option value="2">普通</option>
+      <option value="3">运动（2）</option>
+      <option value="4">狂飙（3）</option>
+      <option value="5">极限（4）</option>
+    </select>
+  </div>
+</div>
+
 <!-- FSD Status -->
 <div class="card">
   <div class="card-head"><div class="icon ic-s">S</div><h2>FSD 状态</h2></div>
@@ -609,44 +654,8 @@ html{scroll-behavior:smooth}
   <summary><span id="controlsSummary" class="control-summary">...</span></summary>
   <div class="controls-body">
   <div class="row">
-    <span class="lbl">车辆硬件<br><span class="hint">建议优先自动识别；若识别不到，可手动选择实际 HW3 / HW4。</span></span>
-    <select id="selHwOverride" onchange="cmd('hw_override',parseInt(this.value,10))">
-      <option value="0">自动识别</option>
-      <option value="3">强制 HW4</option>
-      <option value="2">强制 HW3</option>
-      <option value="1">强制 Legacy</option>
-    </select>
-  </div>
-  <div class="row">
-    <span class="lbl">FSD 协议<br><span class="hint">与物理硬件分开。你的 HW4 + FSD v13.2.9 可选 V13。</span></span>
-    <select id="selProtocol" onchange="cmd('fsd_protocol',parseInt(this.value,10))">
-      <option value="0">自动</option>
-      <option value="13">V13</option>
-      <option value="14">V14</option>
-    </select>
-  </div>
-  <div class="row" id="rowDriveStyle">
-    <span class="lbl">驾驶风格<br><span class="hint">源码映射：自动跟随，或锁定 0–4；编码位置跟随物理 HW 布局</span></span>
-    <select id="selDriveStyle" onchange="cmd('drive_style',parseInt(this.value,10))">
-      <option value="0">自动（跟随原车）</option>
-      <option value="1">轻松</option>
-      <option value="2">普通</option>
-      <option value="3">运动（2）</option>
-      <option value="4">狂飙（3）</option>
-      <option value="5">极限（4）</option>
-    </select>
-  </div>
-  <div class="row">
     <span class="lbl">忽略 OTA</span>
     <label class="sw"><input type="checkbox" id="swIgnoreOta" onchange="cmd('ignore_ota',this.checked)"><span class="sl2"></span></label>
-  </div>
-  <div class="row">
-    <span class="lbl">FSD 激活</span>
-    <label class="sw"><input type="checkbox" id="swFsdUnlock" onchange="cmd('fsd_unlock',this.checked)"><span class="sl2"></span></label>
-  </div>
-  <div class="row">
-    <span class="lbl">NAG Killer</span>
-    <label class="sw"><input type="checkbox" id="swNag" onchange="cmd('nag',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
     <span class="lbl">连续 AP</span>
@@ -683,10 +692,6 @@ html{scroll-behavior:smooth}
   <div class="row">
     <span class="lbl">BMS 显示</span>
     <label class="sw"><input type="checkbox" id="swBms" onchange="cmd('bms',this.checked)"><span class="sl2"></span></label>
-  </div>
-  <div class="row">
-    <span class="lbl">Force FSD</span>
-    <label class="sw"><input type="checkbox" id="swFsd" onchange="cmd('force_fsd',this.checked)"><span class="sl2"></span></label>
   </div>
   <div class="row">
     <span class="lbl">中国模式</span>
