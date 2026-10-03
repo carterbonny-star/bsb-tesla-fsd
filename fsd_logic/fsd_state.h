@@ -27,9 +27,10 @@ typedef struct FSDState {
     // carry no 0x398 (many Model 3 / Model Y) detection can only guess, so let an
     // owner who knows their car say so instead of guessing harder.
     TeslaHWVersion hw_override;
-    // BSB CN protocol selector for 0x3FD speed/profile semantics:
-    // 0=Auto (HW3->V13, HW4->V14), 13=force V13, 14=force V14.
-    // Physical HW selection remains separate and continues to control DAS/status parsing.
+    // BSB CN protocol selector for source-specific V13/V14 semantics:
+    // 0=Auto, 13=force V13, 14=force V14.
+    // IMPORTANT: physical HW remains independent and controls the 0x3FD
+    // speed/profile byte layout in the research model (HW3 mux0 vs HW4 mux2).
     uint8_t fsd_protocol_mode;
     int speed_profile;
     int speed_offset;
