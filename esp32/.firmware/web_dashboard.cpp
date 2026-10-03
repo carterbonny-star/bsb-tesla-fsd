@@ -345,6 +345,13 @@ html{scroll-behavior:smooth}
 .speed-advanced{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
 .speed-advanced summary{cursor:pointer;color:var(--blue);font-size:.76em;font-weight:700}
 .speed-notice{font-size:.7em;color:var(--text3);line-height:1.5;margin-top:10px}
+.control-tier-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 10px}
+.control-tier-btn{border:1px solid var(--border);background:var(--card2);color:var(--text2);border-radius:9px;padding:9px 5px;
+  font-size:.74em;font-weight:800;cursor:pointer}
+.control-tier-btn.active{background:rgba(77,171,247,.14);border-color:rgba(77,171,247,.55);color:var(--blue)}
+.control-tier-note{font-size:.68em;color:var(--text3);line-height:1.45;margin:0 0 8px}
+.mode-quick{margin:2px 0 10px}
+.mode-quick .hint{display:block;margin-top:5px;text-align:center}
 @media(max-width:430px){
   .target-grid{grid-template-columns:repeat(3,1fr)}
   .speed-panel .speed-live{grid-template-columns:repeat(3,1fr)}
@@ -450,6 +457,10 @@ html{scroll-behavior:smooth}
 <!-- Common FSD controls: kept above status for quick access -->
 <div class="card controls-section">
   <div class="card-head"><div class="icon ic-c">C</div><h2>FSD 常用控制</h2></div>
+  <div class="mode-quick">
+    <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">启用模拟计算</button>
+    <span class="hint">研究分支：仅切换模拟计算；物理 CAN TX 保持禁用。</span>
+  </div>
   <div class="row">
     <span class="lbl">FSD 激活</span>
     <label class="sw"><input type="checkbox" id="swFsdUnlock" onchange="cmd('fsd_unlock',this.checked)"><span class="sl2"></span></label>
@@ -648,84 +659,87 @@ html{scroll-behavior:smooth}
 
 <!-- Controls -->
 <div class="card controls-section">
-  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD 控制</h2></div>
-  <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">启用</button>
-<details class="controls-fold">
-  <summary><span id="controlsSummary" class="control-summary">...</span></summary>
-  <div class="controls-body">
-  <div class="row">
+  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD 更多设置</h2></div>
+  <div class="control-tier-tabs" role="tablist" aria-label="FSD control level">
+    <button type="button" class="control-tier-btn active" id="tierRegular" onclick="setControlTier('regular')">常规</button>
+    <button type="button" class="control-tier-btn" id="tierAdvanced" onclick="setControlTier('advanced')">高级</button>
+    <button type="button" class="control-tier-btn" id="tierExperimental" onclick="setControlTier('experimental')">实验</button>
+  </div>
+  <div class="control-tier-note" id="tierNote">日常设置。复杂兼容选项和未经充分验证的功能分别放在“高级 / 实验”。</div>
+  <div class="controls-body" id="tierControls">
+  <div class="row" data-tier="advanced">
     <span class="lbl">忽略 OTA</span>
     <label class="sw"><input type="checkbox" id="swIgnoreOta" onchange="cmd('ignore_ota',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="regular">
     <span class="lbl">连续 AP</span>
     <label class="sw"><input type="checkbox" id="swContinuousAp" onchange="cmd('continuous_ap',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">AP-First (14.x)</span>
     <label class="sw"><input type="checkbox" id="swApFirst" onchange="cmd('ap_first',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Instant Engage (exp.)</span>
     <label class="sw"><input type="checkbox" id="swApFe" onchange="cmd('ap_first_edge',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Minimal Inject (exp.)</span>
     <label class="sw"><input type="checkbox" id="swApMi" onchange="cmd('ap_first_minimal',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Nag EPAS-faithful (14.x, exp.)</span>
     <label class="sw"><input type="checkbox" id="swNagF" onchange="cmd('nag_faithful',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Soft Engage (14.x, exp.)</span>
     <label class="sw"><input type="checkbox" id="swSoft" onchange="cmd('soft_engage',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Nag Burst (14.x, exp.)</span>
     <label class="sw"><input type="checkbox" id="swNagB" onchange="cmd('nag_burst',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Abort Guard (14.x, exp.)</span>
     <label class="sw"><input type="checkbox" id="swAbrt" onchange="cmd('abort_guard',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="regular">
     <span class="lbl">BMS 显示</span>
     <label class="sw"><input type="checkbox" id="swBms" onchange="cmd('bms',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">中国模式</span>
     <label class="sw"><input type="checkbox" id="swChina" onchange="cmd('china_mode',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row" id="rowChime">
+  <div class="row" id="rowChime" data-tier="regular">
     <span class="lbl">关闭限速提示音</span>
     <label class="sw"><input type="checkbox" id="swChime" onchange="cmd('suppress_speed_chime',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">TLSSC Restore</span>
     <label class="sw"><input type="checkbox" id="swTlssc" onchange="cmd('tlssc_restore',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Summon EU Unlock</span>
     <label class="sw"><input type="checkbox" id="swSummon" onchange="cmd('summon_unlock',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Continue on Green<br><small style="color:var(--muted)">pairs with TLSSC</small></span>
     <label class="sw"><input type="checkbox" id="swCog" onchange="cmd('continue_on_green',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">TLSSC bit38</span>
     <label class="sw"><input type="checkbox" id="swTlssc38" onchange="cmd('assist_tlssc_bit38',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Right-Hand Drive (RHD)<br><small style="color:var(--red)">RHD markets only — do NOT enable while driving on the right.</small></span>
     <label class="sw"><input type="checkbox" id="swRhd" onchange="cmd('assist_rhd_override',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">Telemetry Off (experimental)<br><small style="color:var(--muted)">Experimental &amp; unverified — clears reachable telemetry flags only (not the Vehicle-bus ECU log-upload). Does NOT guarantee reduced detection.</small></span>
     <label class="sw"><input type="checkbox" id="swTelOff" onchange="cmd('assist_telemetry_off',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="experimental">
     <span class="lbl">AP Branch/Tier (experimental)<br><small style="color:var(--muted)">Experimental &amp; non-persistent — injects a UI branch/tier hint only, reverts when injection stops; unverified and may be a ban signal. Off by default.</small></span>
     <select id="selApmv3" onchange="cmd('apmv3_branch',parseInt(this.value,10))">
       <option value="255">Off</option>
@@ -737,7 +751,7 @@ html{scroll-behavior:smooth}
       <option value="5">Demo</option>
     </select>
   </div>
-  <div class="row" style="display:block">
+  <div class="row" data-tier="experimental" style="display:block">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <span class="lbl">Track Mode (experimental)<br><small style="color:var(--muted)">Experimental &mdash; Vehicle-bus; not car-validated. Defaults to rear-biased (rotation 100) + 30% stability &mdash; fun with a safety margin. Raise stability for stock feel.</small></span>
       <label class="sw"><input type="checkbox" id="swTrkMode" onchange="cmd('track_mode_inject',this.checked)"><span class="sl2"></span></label>
@@ -759,7 +773,7 @@ html{scroll-behavior:smooth}
       <label class="sw"><input type="checkbox" id="swTrkCO" onchange="cmd('track_cmp_overclock',this.checked)"><span class="sl2"></span></label>
     </div>
   </div>
-  <div class="row" style="display:block">
+  <div class="row" data-tier="advanced" style="display:block">
     <div id="pmSuggest" style="display:none;margin:0 0 8px;padding:8px 10px;border:1px solid var(--accent);border-radius:6px;background:var(--card2)">
       <div style="font-size:12px;color:var(--text)">Looks like variant <b id="pmName">?</b> &mdash; the standard parser can't read AP-state on this bus.</div>
       <button type="button" id="pmApply" onclick="pmApply()" style="margin-top:6px;background:var(--accent);color:#000;border:0;padding:6px 12px;border-radius:4px;cursor:pointer">Apply this profile</button>
@@ -780,29 +794,29 @@ html{scroll-behavior:smooth}
 )rawliteral"
 #if defined(BOARD_TTGO_DISPLAY)
 R"rawliteral(
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">TTGO Display</span>
     <label class="sw"><input type="checkbox" id="swDisp" onchange="cmd('disp',this.checked)"><span class="sl2"></span></label>
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Display Brightness (%)</span>
     <input type="number" id="dispBr" min="0" max="100" style="width:60px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right" onchange="cmd('disp_br',parseInt(this.value))">
   </div>
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Display Timeout (s)</span>
     <input type="number" id="dispTo" min="0" max="3600" style="width:60px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right" onchange="cmd('disp_to',parseInt(this.value))">
   </div>
 )rawliteral"
 #endif
 R"rawliteral(
-  <div class="row">
+  <div class="row" data-tier="regular">
     <span class="lbl">CAN 记录</span>
     <label class="sw"><input type="checkbox" id="swDump" onchange="cmd('dump',this.checked)"><span class="sl2"></span></label>
   </div>
 )rawliteral"
 #if defined(BOARD_LILYGO)
 R"rawliteral(
-  <div class="row">
+  <div class="row" data-tier="advanced">
     <span class="lbl">Deep Sleep (sec)</span>
     <input type="number" id="numSleep" min="10" max="3600" style="width:60px;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;text-align:right" onchange="cmd('sleep',parseInt(this.value)*1000)">
   </div>
@@ -810,7 +824,6 @@ R"rawliteral(
 #endif
 R"rawliteral(
   </div>
-</details>
 </div>
 
 <!-- Tap capability checker (#125) -->
@@ -1007,6 +1020,20 @@ function speedText(v,seen,source){
   var src=source?'<small> '+source+'</small>':'';
   return Math.round(v)+' km/h'+src;
 }
+function setControlTier(tier){
+  var rows=document.querySelectorAll('#tierControls [data-tier]');
+  for(var i=0;i<rows.length;i++) rows[i].style.display=(rows[i].getAttribute('data-tier')===tier)?'':'none';
+  var ids={regular:'tierRegular',advanced:'tierAdvanced',experimental:'tierExperimental'};
+  Object.keys(ids).forEach(function(k){var b=document.getElementById(ids[k]);if(b)b.classList.toggle('active',k===tier);});
+  var note=document.getElementById('tierNote');
+  if(note){
+    note.textContent=tier==='regular'?'日常设置。复杂兼容选项和未经充分验证的功能分别放在“高级 / 实验”。':
+      tier==='advanced'?'兼容性与地区/车型相关设置；不确定用途时保持默认。':
+      '实验功能：用于研究验证，默认保持关闭。';
+  }
+}
+document.addEventListener('DOMContentLoaded',function(){setControlTier('regular');});
+
 function updateControlsSummary(d){
   var e=document.getElementById('controlsSummary');
   if(!e)return;
