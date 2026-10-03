@@ -314,6 +314,25 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 .test-btn:disabled{opacity:.4;color:var(--text3);border-color:var(--border);background:var(--card2)}
 .metric{font-size:.95em;font-weight:700;font-variant-numeric:tabular-nums}
 .metric small{font-size:.72em;color:var(--text3);font-weight:600}
+
+/* 1.4.33-inspired information architecture: compact overview + section tabs.
+   UI-only; existing control IDs/handlers and CAN/research behavior are unchanged. */
+html{scroll-behavior:smooth}
+.top-tabs{display:flex;gap:7px;overflow-x:auto;padding:4px 0 12px;scrollbar-width:none}
+.top-tabs::-webkit-scrollbar{display:none}
+.top-tabs a{flex:0 0 auto;text-decoration:none;color:var(--text2);font-size:.76em;font-weight:700;
+  border:1px solid var(--border);background:var(--card2);padding:8px 11px;border-radius:10px}
+.top-tabs a:hover,.top-tabs a:focus{color:var(--text);border-color:rgba(77,171,247,.55);outline:none}
+.quick-card{padding:14px}
+.quick-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.quick-title strong{font-size:.86em}
+.quick-title span{font-size:.68em;color:var(--text3)}
+.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.quick-item{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;min-width:0}
+.quick-v{display:block;font-size:1.12em;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quick-l{display:block;margin-top:3px;font-size:.65em;color:var(--text3)}
+.section-anchor{scroll-margin-top:10px}
+@media(max-width:430px){.quick-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -325,6 +344,14 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   <div class="sub">ESP32 CAN 控制器 &middot; <span id="deviceHost">device.local</span></div>
   <div class="cdot" id="dot"></div>
 </div>
+
+<nav class="top-tabs" aria-label="Dashboard sections">
+  <a href="#dashboardSection">DASHBOARD</a>
+  <a href="#speedSection">速度策略</a>
+  <a href="#perfTestSection">PERF TEST</a>
+  <a href="#batterySection">BMS</a>
+  <a href="#networkSection">网络 / 系统</a>
+</nav>
 
 <!-- Chip temperature: before FSD status, using the existing live telemetry IDs. -->
 <div class="card chip-temperature" aria-label="ESP32 芯片温度监控" title="ESP32-S3 内部传感器，仅用于趋势监控">
@@ -391,6 +418,19 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   </div>
 </div>
 
+<!-- 1.4.33-style compact dashboard: live summary only, no new control behavior -->
+<div class="card quick-card section-anchor" id="dashboardSection">
+  <div class="quick-title"><strong>驾驶状态概览</strong><span>LIVE / RESEARCH</span></div>
+  <div class="quick-grid">
+    <div class="quick-item"><span class="quick-v" id="qLimit">--</span><span class="quick-l">道路限速 km/h</span></div>
+    <div class="quick-item"><span class="quick-v" id="qTarget">--</span><span class="quick-l">目标速度 km/h</span></div>
+    <div class="quick-item"><span class="quick-v" id="qOffset">--</span><span class="quick-l">当前偏移 %</span></div>
+    <div class="quick-item"><span class="quick-v" id="qHw">--</span><span class="quick-l">物理 HW 布局</span></div>
+    <div class="quick-item"><span class="quick-v" id="qProto">--</span><span class="quick-l">FSD 协议</span></div>
+    <div class="quick-item"><span class="quick-v" id="qTemp">--</span><span class="quick-l">芯片温度 °C</span></div>
+  </div>
+</div>
+
 <!-- FSD Status -->
 <div class="card">
   <div class="card-head"><div class="icon ic-s">S</div><h2>FSD 状态</h2></div>
@@ -416,8 +456,8 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
   </div>
 </div>
 
-<!-- HTTP CAN Log: kept expanded near the top for speed-offset validation -->
-<div class="card">
+<!-- HTTP CAN Log: PERF TEST / research capture -->
+<div class="card section-anchor" id="perfTestSection">
   <div class="card-head"><div class="icon ic-d">L</div><h2>CAN 研究日志</h2>
     <span class="pill off" id="httpLogSt" style="margin-left:auto"><span class="pd"></span>Idle</span>
   </div>
@@ -499,8 +539,8 @@ input:checked+.sl2:before{transform:translateX(20px);background:#fff}
 </div>
 
 <!-- Controls -->
-<div class="card controls-section">
-  <div class="card-head"><div class="icon ic-c">C</div><h2>控制</h2></div>
+<div class="card controls-section section-anchor" id="speedSection">
+  <div class="card-head"><div class="icon ic-c">C</div><h2>FSD / 速度策略</h2></div>
   <button id="btnMode" class="btn-main btn-act" onclick="toggleMode()">启用</button>
 <details class="controls-fold">
   <summary><span id="controlsSummary" class="control-summary">...</span></summary>
@@ -765,8 +805,8 @@ R"rawliteral(
 </div>
 
 <!-- Administration -->
-<details class="config-section">
-  <summary><div class="icon ic-c">A</div><div class="card-head" style="margin:0"><h2>管理</h2></div></summary>
+<details class="config-section section-anchor" id="networkSection">
+  <summary><div class="icon ic-c">A</div><div class="card-head" style="margin:0"><h2>网络 / 系统管理</h2></div></summary>
   <div class="config-body">
 
 
@@ -1132,6 +1172,14 @@ function upd(d){
   if(Array.isArray(d.hw3_custom_pct))for(var i=0;i<4;i++)speedSetVal('cp'+i,d.hw3_custom_pct[i]);
   var rv=document.getElementById('researchValues');
   if(rv){var hwl=(d.hw_override&&d.hw_override!==0)?d.hw_override:d.hw_version;var hwt=hwl===3?'HW4':(hwl===2?'HW3':'未知');rv.textContent='目标 '+Number(d.research_target_kph||0).toFixed(2)+' / 平滑 '+Number(d.research_smooth_kph||0).toFixed(2)+' / cap '+Number(d.research_cap_kph||0).toFixed(0)+' km/h；布局 '+hwt+'；模拟帧 can0='+d.mock_can0+'，can1='+d.mock_can1+'；物理 TX=0';}
+
+  // Compact 1.4.33-style overview. Mirrors existing telemetry only.
+  var ql=document.getElementById('qLimit'); if(ql)ql.textContent=d.private399_limit_seen?Number(d.private399_limit_kph||0).toFixed(0):'--';
+  var qt=document.getElementById('qTarget'); if(qt)qt.textContent=d.private399_limit_seen?Number(d.research_target_kph||0).toFixed(0):'--';
+  var qo=document.getElementById('qOffset'); if(qo)qo.textContent=(d.speed_offset!==undefined)?String(d.speed_offset):'--';
+  var qh=document.getElementById('qHw'); if(qh){var _hw=(d.hw_override&&d.hw_override!==0)?d.hw_override:d.hw_version;qh.textContent=_hw===3?'HW4':(_hw===2?'HW3':(_hw===1?'Legacy':'--'));}
+  var qp=document.getElementById('qProto'); if(qp){var _p=d.fsd_protocol_mode;qp.textContent=_p===13?'V13':(_p===14?'V14':('Auto '+(d.research_protocol_detected?('V'+d.research_protocol_detected):'')));}
+  var qtemp=document.getElementById('qTemp'); if(qtemp)qtemp.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1):'--';
 
   var ct=document.getElementById('chipTemp'),ctm=document.getElementById('chipTempMax');
   if(ct)ct.textContent=(d.chip_temp_c!==undefined)?Number(d.chip_temp_c).toFixed(1)+' °C':'--';
