@@ -10,6 +10,13 @@ static inline bool research_v13(const FSDState* s) {
         (s->fsd_protocol_mode == 0 && s->research_protocol_detected == 13);
 }
 
+// The supplied source chooses 0x3FD speed/profile byte layout from physical
+// HW target (auto-detected or manually overridden), independently of V13/V14
+// mode. This matters for HW4 vehicles running a V13 software stack.
+static inline TeslaHWVersion research_layout_hw(const FSDState* s) {
+    return s->hw_override != TeslaHW_Unknown ? s->hw_override : s->hw_version;
+}
+
 static inline bool research_limit_valid(unsigned limit) {
     const unsigned limits[] = {15,20,25,30,35,40,45,50,55,60,70,80,90,100,110,120};
     for(unsigned i=0; i<sizeof(limits)/sizeof(limits[0]); ++i)
@@ -135,28 +142,87 @@ static inline unsigned research_calculate(FSDState* s, unsigned bus, CANFRAME* f
         return 1;
     }
     if(f->id!=0x3FD || !s->fsd_unlock) return 0;
+
+    const bool v13=research_v13(s);
+    const TeslaHWVersion layout=research_layout_hw(s);
+    const bool hw4=(layout==TeslaHW_HW4);
+    const bool hw3=(layout==TeslaHW_HW3);
+    if(!hw4 && !hw3) return 0;
+
     unsigned mux=f->data[0]&7;
     bool changed=false;
-    if(!research_v13(s)) {
-        if(s->research_gear!='D' && s->research_gear!='R') return 0;
-        if(mux==0) { f->data[5]|=0x40; f->data[7]|=0x10; f->data[4]|=0x40; changed=true; }
-        if(mux==1) { f->data[5]|=0xA0; changed=true; }
-        if(mux==2 && s->research_engaged) {
-            f->data[7]=(f->data[7]&~0x70)|((s->research_profile&7)<<4);
-            f->data[1]=(f->data[1]&~0x3F)|(s->speed_offset&0x3F);
-            changed=true;
+
+    // Protocol mode controls the source's activation/mux1 semantics.
+    // Speed-offset/profile byte positions below are selected only by physical HW.
+    if(!v13) {
+        if(hw4) {
+            if(s->research_gear!='D' && s->research_gear!='R') return 0;
+            if(mux==0) {
+                f->data[5]|=0x40;
+                f->data[7]|=0x10;
+                f->data[4]|=0x40;
+                changed=true;
+            }
+            if(mux==1) {
+                f->data[5]|=0xA0;
+                changed=true;
+            }
+            if(mux==2 && s->research_engaged) {
+                f->data[7]=(f->data[7]&~0x70)|((s->research_profile&7)<<4);
+                f->data[1]=(f->data[1]&~0x3F)|(s->speed_offset&0x3F);
+                changed=true;
+            }
+        } else {
+            if(mux==0) {
+                f->data[5]|=0x40;
+                f->data[4]|=0x40;
+                if(s->research_engaged) {
+                    f->data[4]=(f->data[4]&~0x3F)|(s->speed_offset&0x3F);
+                    f->data[6]=(f->data[6]&~0x06)|((s->research_profile&3)<<1);
+                }
+                changed=true;
+            }
+            if(mux==1) {
+                f->data[5]|=0xA0;
+                changed=true;
+            }
         }
     } else {
-        if(mux==0) {
-            f->data[5]|=0x40;
-            if(s->research_engaged) {
-                f->data[4]=(f->data[4]&~0x3F)|0x40|(s->speed_offset&0x3F);
-                f->data[6]=(f->data[6]&~0x06)|((s->research_profile&3)<<1);
+        if(s->research_gear!='D' && s->research_gear!='R') return 0;
+        if(hw4) {
+            if(mux==0) {
+                f->data[5]|=0x40;
+                f->data[7]|=0x10;
+                f->data[4]|=0x40;
+                changed=true;
             }
-            changed=true;
+            if(mux==1) {
+                f->data[2]&=~0x08;
+                f->data[5]|=0xA0;
+                changed=true;
+            }
+            if(mux==2 && s->research_engaged) {
+                f->data[7]=(f->data[7]&~0x70)|((s->research_profile&7)<<4);
+                f->data[1]=(f->data[1]&~0x3F)|(s->speed_offset&0x3F);
+                changed=true;
+            }
+        } else {
+            if(mux==0) {
+                f->data[5]|=0x40;
+                f->data[4]|=0x40;
+                f->data[4]=(f->data[4]&~0x3F)|(s->speed_offset&0x3F);
+                if(s->research_gear=='D')
+                    f->data[6]=(f->data[6]&~0x06)|((s->research_profile&3)<<1);
+                changed=true;
+            }
+            if(mux==1) {
+                f->data[2]&=~0x08;
+                f->data[5]|=0x20;
+                changed=true;
+            }
         }
-        if(mux==1) { f->data[2]&=~0x08; f->data[5]|=0xA0; changed=true; }
     }
+
     if(changed) ++s->frames_modified;
     return changed ? 2 : 0;
 }
